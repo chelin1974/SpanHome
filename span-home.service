@@ -1,0 +1,16 @@
+[Unit]
+Description=SPAN Panel HomeKit bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust to where you put the jar and config.
+WorkingDirectory=/opt/span-home
+ExecStart=/usr/bin/java -jar /opt/span-home/span-home.jar --config /opt/span-home/span-home.config.json
+Restart=on-failure
+RestartSec=10
+User=span-home
+
+[Install]
+WantedBy=multi-user.target

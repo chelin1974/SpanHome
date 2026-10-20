@@ -1,0 +1,188 @@
+# SpanHome
+
+Puts SPAN smart panels into Apple Home: every circuit as an outlet you can see and (if you
+allow it) switch, live power readings, and battery backup with a grid-outage sensor.
+
+```
+SPAN Panel  →  local SPAN API (MQTT over TLS)  →  this bridge  →  Apple Home / Siri
+```
+
+No cloud. The bridge talks to each panel on your home network through
+[SPAN API](https://github.com/spanio/SPAN-API-Client-Docs), the official local interface SPAN
+released in 2026, and speaks the HomeKit Accessory Protocol directly via
+[HAP-Java](https://github.com/hap-java/HAP-Java). Changes show up in seconds, not minutes.
+Several panels share one bridge.
+
+## What shows up in Home
+
+| In Home | What it is | From the panel |
+| --- | --- | --- |
+| An **outlet** per circuit | On = relay closed (powered). "In use" = drawing ≥ 5 W. | `switch/relay`, `meter/active-power` |
+| **Watts, kWh, volts, amps** per circuit | Shown in the free **Eve** app, not Apple Home (Home has no power display) | `meter/*`, panel voltage |
+| A **"Grid"** contact sensor per panel with a battery | *Closed* on grid, *open* during an outage, so you can build "when the power goes out" automations | MID `grid/islanding-state` |
+| **Battery level** on that accessory | Charge %, charging state, low-battery alert below 20 % | BESS `soc/soc`, `power-flows/battery` |
+
+### Circuits are read-only unless you say otherwise
+
+Turning a circuit "off" in Home cuts its power. A misheard Siri command or a bad automation
+shouldn't be able to switch off the fridge, so **every circuit is read-only by default**:
+it shows its state and power, and if someone taps it, it snaps back. List the circuits Home
+may switch in `switchCircuits`:
+
+```json
+"switchCircuits": ["Hot Tub", "Second: EV Charger"]
+```
+
+Match by circuit name, `"Panel: Circuit"` for one panel's circuit, the circuit's ID, or `"*"`
+for every circuit the panel allows switching. Circuits the panel itself won't switch (the
+commissioned solar and battery circuits, for instance) are always read-only.
+
+## Requirements
+
+- **SPAN firmware with SPAN API.** Built against `spanos3/r202633` (the parent/child data
+  model). The SPAN API beta started on the MAIN 32. `--list` prints each panel's model and
+  firmware.
+- **Java 21 or newer**, and Maven to build.
+- **A machine that stays on**, on the same network as the panels and your Home hub (Apple TV
+  or HomePod). HomeKit finds the bridge over Bonjour, so no guest Wi-Fi or VLAN between them.
+
+## Setup
+
+**1. Build.**
+
+```bash
+mvn package
+```
+
+**2. Configure.** Copy the example and set your panel serials (shown in the SPAN Home app):
+
+```bash
+cp span-home.config.example.json span-home.config.json
+```
+
+Each panel is reached at `span-<serial>.local`. If `.local` names don't resolve on your
+network, add `"host": "192.168.x.x"` to that panel. Give panels a static DHCP lease: the panel
+re-issues its TLS certificate whenever its IP changes.
+
+**3. Register with each panel.** This pairs the bridge with the panel's SPAN API and saves
+the broker credentials to `span-home.credentials.json` (owner-only).
+
+```bash
+java -jar target/span-home.jar --register
+```
+
+For each panel, it waits while you **open the panel door and press the door switch twice
+more** (opening it counts as the first press); the breaker LEDs flash to confirm. Or skip the
+door with the passphrase from the SPAN Home app; you'll be prompted for it:
+
+```bash
+java -jar target/span-home.jar --register --passphrase
+```
+
+Use `--panel nj-2410-00h35` to register just one.
+
+**4. Look before you switch anything on.**
+
+```bash
+java -jar target/span-home.jar --list
+```
+
+```
+Panel Main (nj-2410-00h2v) MAIN_32, firmware spanos3/r202633/04, 121 V
+  Spaces  Circuit                         Watts   Relay  In Home as
+  3       Kitchen Fridge                    142  CLOSED  read-only (panel will not switch it)
+  17,19   Hot Tub                          1451  CLOSED  SWITCHABLE
+  Battery: 76%, discharging, on grid, ~10h12m backup
+```
+
+Use the names exactly as listed in `switchCircuits` and `hiddenCircuits`.
+
+**5. Run and pair.**
+
+```bash
+java -jar target/span-home.jar
+```
+
+The log prints the address the bridge is advertised on and a setup code. In the Home app:
+**+ → Add Accessory → More options… → SPAN**, enter the code, and accept the "uncertified
+accessory" warning.
+
+For a permanent install, `span-home.service` is a systemd unit: copy it to
+`/etc/systemd/system/`, adjust the paths, and `systemctl enable --now span-home`.
+
+## Configuration
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| `panels[].serial` | — | Required. |
+| `panels[].host` | `span-<serial>.local` | An IP works too. |
+| `panels[].name` | the serial | Short label, used for `"Panel: Circuit"` matching and to tell same-named circuits apart. |
+| `switchCircuits` | none | Circuits Home may switch. See above. |
+| `hiddenCircuits` | none | Circuits left out of Home. No `"*"` here. |
+| `showBattery` | `true` | Publish the Grid/battery accessory when a battery is commissioned. |
+| `bridgeName` | `SPAN` | Shown while pairing. |
+| `port` | `51828` | HomeKit port. Different from DaikinHome's, so both can run on one machine. |
+| `bindAddress` | chosen automatically | LAN IP to advertise on. Set it if the Home app can't find the bridge. |
+| `storagePath`, `credentialsPath`, `accessoryIdsPath` | next to the config | See below. |
+
+## Files to keep
+
+| File | Holds | If lost |
+| --- | --- | --- |
+| `span-home.state.json` | HomeKit pairing | Every accessory goes "No Response"; remove and re-add the bridge. |
+| `span-home.accessories.json` | A stable HomeKit ID per circuit | Rooms, names and automations are reset. |
+| `span-home.credentials.json` | Each panel's broker password and CA | Run `--register` again. |
+
+All three are in `.gitignore`. The credentials file controls every breaker in the house:
+keep it owner-only.
+
+## How it works
+
+- **Discovery.** The panel publishes a Homie 5 device tree: the panel, then each circuit,
+  lugs and battery as children, and the battery's MID as a grandchild. The bridge subscribes to
+  `ebus/5/#`, waits until every device has described itself, then publishes accessories.
+  Devices are identified by their `type`, never by parsing IDs.
+- **Security.** At registration the bridge downloads the panel's self-signed CA and pins it.
+  The passphrase is sent over HTTPS verified against that CA, and every MQTT connection is TLS
+  with hostname verification against it. A different device answering on the panel's address
+  is refused.
+- **Switching** publishes `OPEN`/`CLOSED` to `ebus/5/<circuit>/switch/relay/set`. Home shows the
+  new state at once; the panel's own report then takes over.
+- **Sign conventions.** A circuit's `active-power` is negative while it consumes, so the bridge
+  shows `-active-power` as consumption, and a circuit backfeeding solar shows 0 W. Charging
+  state comes from the panel's `power-flows/battery` (positive = charging), because the BESS
+  `meter/active-power` sign flipped in firmware r202639.
+- **Reconnects** are automatic after a network drop or panel reboot.
+
+## Known gaps
+
+- **Power readings live in the Eve app.** Apple Home has no characteristic for watts or kWh.
+  Eve shows live values; its history graphs need Eve's proprietary history service, which
+  this bridge doesn't implement.
+- **Battery has no Home tile of its own.** The level appears in the Grid accessory's details,
+  and low-battery alerts work. Eve shows the level too.
+- **New circuits need a restart.** Accessories are built at startup.
+- **SPAN Drive and load-shed priorities** aren't exposed, though the API allows both.
+- **SPAN API is a beta** and community-supported. SPAN's notes on each firmware release are in
+  the [changelog](https://github.com/spanio/SPAN-API-Client-Docs/blob/main/CHANGELOG.md);
+  breaking changes have happened (r202633, r202639).
+
+## Development
+
+```bash
+mvn test
+```
+
+| Path | What it does |
+| --- | --- |
+| `span/HomieTree` | Pure model of one panel's device tree, fed MQTT messages. **Start here.** |
+| `span/SpanReadings` | What the properties mean: signs, units, battery and grid state |
+| `span/SpanPanelConnection` | TLS MQTT client per panel |
+| `span/SpanRegistration` | `--register`: CA download and `auth/register` |
+| `homekit/CircuitOutlet` | A circuit as an outlet, with Eve power characteristics |
+| `homekit/BackupBattery` | Grid contact sensor and battery service |
+| `SpanHomeBridge` | Startup, discovery, wiring panels to accessories |
+
+## License
+
+MIT

@@ -1,0 +1,13 @@
+{
+  "panels": [
+    { "serial": "nj-2410-00h2v", "name": "Main" },
+    { "serial": "nj-2410-00h35", "name": "Second" }
+  ],
+
+  "switchCircuits": [],
+  "hiddenCircuits": [],
+
+  "showBattery": true,
+  "bridgeName": "SPAN",
+  "port": 51828
+}

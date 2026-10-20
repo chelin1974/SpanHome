@@ -1,0 +1,14 @@
+target/
+*.class
+
+# Local config, panel credentials and HomeKit pairing state - never commit these.
+span-home.config.json
+span-home.credentials.json
+span-home.state.json
+span-home.accessories.json
+
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.log
