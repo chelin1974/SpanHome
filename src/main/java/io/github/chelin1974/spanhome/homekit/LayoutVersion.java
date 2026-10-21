@@ -45,6 +45,7 @@ public final class LayoutVersion {
     String fingerprint = fingerprint(accessories);
     State state = read(file);
     if (fingerprint.equals(state.fingerprint)) {
+      log.info("HomeKit configuration {} (accessory layout unchanged)", state.configurationIndex);
       return state.configurationIndex;
     }
     boolean first = state.fingerprint == null;
@@ -57,7 +58,9 @@ public final class LayoutVersion {
     } catch (IOException e) {
       log.warn("could not save {}: {}", file, e.getMessage());
     }
-    if (!first) {
+    if (first) {
+      log.info("HomeKit configuration {} (first layout recorded; iOS reloads the accessories once)", state.configurationIndex);
+    } else {
       log.info("accessory layout changed; HomeKit configuration is now {}, so iOS reloads it", state.configurationIndex);
     }
     return state.configurationIndex;
