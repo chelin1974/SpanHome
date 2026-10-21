@@ -77,7 +77,10 @@ public final class SpanHomeConfig {
   /** Publish a backup-battery accessory when a panel has a battery commissioned. */
   public Boolean showBattery = true;
 
-  /** Show each circuit's watts in the Home app, as a light sensor reading in "lux". */
+  /**
+   * Publish a "<circuit> Power" accessory for each circuit, so the Home app shows its watts on
+   * a tile of its own (as a light sensor reading in "lux").
+   */
   public Boolean showWattsInHome = true;
 
   /** Publish each panel's total draw, and the whole house's, as power sensors. */

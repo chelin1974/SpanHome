@@ -196,10 +196,20 @@ public final class SpanHomeBridge implements AutoCloseable {
               tree,
               wanted && controllable,
               (id, closed) -> connection.set(id, "switch", "relay", closed ? "CLOSED" : "OPEN"),
-              scheduler,
-              config.showWattsInHome);
+              scheduler);
       outlets.put(circuit.id(), outlet);
       built.add(outlet);
+
+      // Its own accessory, so the Home app gives the reading a tile of its own next to the
+      // switch. As a second service on the outlet, Home would fold it into the switch's tile.
+      if (config.showWattsInHome) {
+        String powerName = HomeKitNames.unique(HomeKitNames.clean(display + " Power", display), takenNames);
+        takenNames.add(powerName);
+        String circuitId = circuit.id();
+        built.add(new PowerSensor(
+            ids.idFor("power:" + circuitId), powerName, circuitId + "-power",
+            () -> SpanReadings.consumptionWatts(tree, circuitId), scheduler));
+      }
       if (outlet.isSwitchable()) {
         switchable++;
       }

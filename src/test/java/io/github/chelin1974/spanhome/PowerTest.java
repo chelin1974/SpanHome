@@ -8,7 +8,6 @@ import io.github.chelin1974.spanhome.homekit.CircuitOutlet;
 import io.github.chelin1974.spanhome.homekit.PowerSensor;
 import io.github.chelin1974.spanhome.span.HomieTree;
 import io.github.chelin1974.spanhome.span.SpanReadings;
-import java.util.concurrent.Executors;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -44,17 +43,23 @@ class PowerTest {
   }
 
   @Test
-  @DisplayName("with watts in Home, a circuit adds a light sensor and still registers cleanly")
-  void circuitLightSensor() throws Exception {
+  @DisplayName("a circuit's power sensor is a light sensor that follows that circuit's draw")
+  void circuitPowerSensor() throws Exception {
     HomieTree tree = PanelFixture.tree();
-    var scheduler = Executors.newSingleThreadScheduledExecutor();
-    try {
-      CircuitOutlet outlet = new CircuitOutlet(2, HOT_TUB, "Hot Tub", PANEL, tree, true, (id, on) -> {}, scheduler, true);
-      assertEquals(2, outlet.getServices().size());
-      assertEquals("00000084-0000-1000-8000-0026BB765291", outlet.getServices().get(1).getType());
-      AccessoryListingTest.assertNoDuplicates(outlet);
-    } finally {
-      scheduler.shutdownNow();
-    }
+    PowerSensor sensor =
+        new PowerSensor(41, "Hot Tub Power", HOT_TUB + "-power", () -> SpanReadings.consumptionWatts(tree, HOT_TUB), null);
+    assertEquals("00000084-0000-1000-8000-0026BB765291", sensor.getServices().get(0).getType());
+    assertEquals(1451.0, sensor.getCurrentAmbientLightLevel().get(), 1e-9);
+
+    tree.accept("ebus/5/" + HOT_TUB + "/meter/active-power", "-12");
+    assertEquals(12.0, sensor.getCurrentAmbientLightLevel().get(), 1e-9);
+  }
+
+  @Test
+  @DisplayName("the outlet itself carries only the outlet service, so its tile is just the switch")
+  void outletAlone() {
+    HomieTree tree = PanelFixture.tree();
+    CircuitOutlet outlet = new CircuitOutlet(2, HOT_TUB, "Hot Tub", PANEL, tree, true, (id, on) -> {}, null);
+    assertEquals(1, outlet.getServices().size());
   }
 }

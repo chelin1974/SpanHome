@@ -18,7 +18,7 @@ Several panels share one bridge.
 | In Home | What it is | From the panel |
 | --- | --- | --- |
 | An **outlet** per circuit | On = relay closed (powered). "In use" = drawing ≥ 5 W. | `switch/relay`, `meter/active-power` |
-| **Watts** per circuit, in the Home app | A light sensor on each circuit, reading in "lux": 1,450 W shows as 1450 lux (see below) | `meter/active-power` |
+| **Watts** per circuit, in the Home app | A "<circuit> Power" tile next to each switch, reading in "lux": 1,450 W shows as 1450 lux (see below) | `meter/active-power` |
 | **Panel and house power** | A "Main Power" and "Second Power" sensor per panel, plus "House Power" for all panels together, also in "lux" | sum of circuit draw |
 | **Watts, kWh, volts, amps**, properly labelled | In the free **Eve** app | `meter/*`, panel voltage |
 | A **"Grid"** contact sensor per panel with a battery | *Closed* on grid, *open* during an outage, so you can build "when the power goes out" automations | MID `grid/islanding-state` |
@@ -28,10 +28,14 @@ Several panels share one bridge.
 
 Apple Home has no characteristic for power, so it cannot show watts anywhere. The common
 workaround, used here, is a light sensor whose reading is the wattage: Home shows the number
-with a "lux" label. It also works in automations ("when Pool rises above 1000"). Each circuit's
-light sensor is part of the circuit's accessory; long-press it and choose **Show as Separate
-Tiles** to see the reading on its own tile. Turn all of this off with `"showWattsInHome": false`
-and `"showPanelPower": false`, and use the Eve app instead.
+with a "lux" label. It also works in automations ("when Pool Power rises above 1000").
+
+Each circuit's reading is its own accessory, "<circuit> Power", so it gets a tile of its own
+next to the circuit's switch. (A reading attached to the switch's accessory would be folded into
+the switch's tile.) New power tiles land in your default room; move them once. Turn all of this
+off with `"showWattsInHome": false` and `"showPanelPower": false`, and use the Eve app instead.
+With both on, a bridge carries about two accessories per circuit, well inside HomeKit's limit
+of 149.
 
 ### Switching circuits
 
@@ -194,7 +198,7 @@ setup, use a Mac mini or a Linux box with the systemd unit above.
 | `readOnlyCircuits` | none | Circuits Home must never switch. Overrides `switchCircuits`. No `"*"`. |
 | `hiddenCircuits` | none | Circuits left out of Home. No `"*"` here. |
 | `showBattery` | `true` | Publish the Grid/battery accessory when a battery is commissioned. |
-| `showWattsInHome` | `true` | A watts light sensor on each circuit, so Home shows its draw. |
+| `showWattsInHome` | `true` | A "<circuit> Power" tile for each circuit, so Home shows its draw. |
 | `showPanelPower` | `true` | Per-panel and whole-house power sensors. |
 | `bridgeName` | `SPAN` | Shown while pairing. |
 | `port` | `51828` | HomeKit port. Different from DaikinHome's, so both can run on one machine. |

@@ -7,8 +7,6 @@ import io.github.hapjava.accessories.OutletAccessory;
 import io.github.hapjava.accessories.optionalcharacteristic.AccessoryWithName;
 import io.github.hapjava.characteristics.HomekitCharacteristicChangeCallback;
 import io.github.hapjava.services.Service;
-import io.github.hapjava.characteristics.impl.lightsensor.CurrentAmbientLightLevelCharacteristic;
-import io.github.hapjava.services.impl.LightSensorService;
 import io.github.hapjava.services.impl.OutletService;
 import java.time.Duration;
 import java.time.Instant;
@@ -28,8 +26,6 @@ import org.slf4j.LoggerFactory;
  *   <li><b>In use</b> means the circuit is drawing more than a few watts.
  *   <li>Watts, kWh, volts and amps ride along as Eve characteristics (see
  *       {@link EveCharacteristics}), visible in the Eve app.
- *   <li>Optionally, watts also as a light sensor, so the Home app shows the number (as "lux":
- *       Apple Home has no power display). See {@link PowerSensor#toLux(double)}.
  * </ul>
  *
  * <p>A read-only circuit, one not listed in {@code switchCircuits} or one the panel will not
@@ -70,8 +66,6 @@ public final class CircuitOutlet implements OutletAccessory, AccessoryWithName {
   private final AtomicReference<HomekitCharacteristicChangeCallback> onKwh = new AtomicReference<>();
   private final AtomicReference<HomekitCharacteristicChangeCallback> onVolts = new AtomicReference<>();
   private final AtomicReference<HomekitCharacteristicChangeCallback> onAmps = new AtomicReference<>();
-  private final AtomicReference<HomekitCharacteristicChangeCallback> onLux = new AtomicReference<>();
-  private final boolean wattsInHome;
 
   private volatile Boolean optimistic;
   private volatile Instant optimisticUntil = Instant.EPOCH;
@@ -87,21 +81,6 @@ public final class CircuitOutlet implements OutletAccessory, AccessoryWithName {
       boolean switchable,
       RelayControl control,
       ScheduledExecutorService scheduler) {
-    this(id, circuitId, displayName, panelSerial, tree, switchable, control, scheduler, false);
-  }
-
-  /** @param wattsInHome also publish watts as a light sensor the Home app can display */
-  public CircuitOutlet(
-      int id,
-      String circuitId,
-      String displayName,
-      String panelSerial,
-      HomieTree tree,
-      boolean switchable,
-      RelayControl control,
-      ScheduledExecutorService scheduler,
-      boolean wattsInHome) {
-    this.wattsInHome = wattsInHome;
     this.id = id;
     this.circuitId = circuitId;
     this.displayName = displayName;
@@ -150,7 +129,6 @@ public final class CircuitOutlet implements OutletAccessory, AccessoryWithName {
       fire(onKwh);
       fire(onAmps);
       fire(onVolts);
-      fire(onLux);
     }
   }
 
@@ -263,19 +241,7 @@ public final class CircuitOutlet implements OutletAccessory, AccessoryWithName {
             EveCharacteristics.CURRENT, "Electric Current", 1_000, 0.01, "A",
             () -> CompletableFuture.completedFuture(SpanReadings.currentAmps(tree, circuitId)),
             onAmps::set, () -> onAmps.set(null)));
-    if (!wattsInHome) {
-      return List.of(outlet);
-    }
-    LightSensorService watts =
-        new LightSensorService(
-            new CurrentAmbientLightLevelCharacteristic(
-                CurrentAmbientLightLevelCharacteristic.DEFAULT_MIN_VALUE,
-                CurrentAmbientLightLevelCharacteristic.DEFAULT_MAX_VALUE,
-                CurrentAmbientLightLevelCharacteristic.DEFAULT_STEP,
-                () -> CompletableFuture.completedFuture(PowerSensor.toLux(SpanReadings.consumptionWatts(tree, circuitId))),
-                onLux::set,
-                () -> onLux.set(null)));
-    return List.of(outlet, watts);
+    return List.of(outlet);
   }
 
   // --------------------------------------------------------------- identity
