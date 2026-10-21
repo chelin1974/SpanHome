@@ -174,7 +174,9 @@ public final class SpanHomeBridge implements AutoCloseable {
       }
       boolean wanted = config.isSwitchable(label, name, circuit.id());
       boolean controllable = SpanReadings.relayControllable(tree, circuit);
-      if (wanted && !controllable) {
+      // Only worth saying when the circuit was named: under the "*" default, circuits the panel
+      // will not switch are expected, and listing them on every start is noise.
+      if (wanted && !controllable && config.isNamedInSwitchCircuits(label, name, circuit.id())) {
         log.info("\"{}\" is in switchCircuits, but the panel does not allow switching it; it will be read-only.", name);
       }
 

@@ -177,6 +177,11 @@ public final class SpanHomeConfig {
         && !matches(readOnlyCircuits, panelLabel, circuitName, circuitId, false);
   }
 
+  /** True when {@code switchCircuits} names this circuit itself, not just through {@code "*"}. */
+  public boolean isNamedInSwitchCircuits(String panelLabel, String circuitName, String circuitId) {
+    return matches(switchCircuits, panelLabel, circuitName, circuitId, false);
+  }
+
   public boolean isHidden(String panelLabel, String circuitName, String circuitId) {
     return matches(hiddenCircuits, panelLabel, circuitName, circuitId, false);
   }

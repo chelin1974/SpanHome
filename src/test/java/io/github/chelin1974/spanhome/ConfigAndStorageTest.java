@@ -48,6 +48,16 @@ class ConfigAndStorageTest {
   }
 
   @Test
+  @DisplayName("only a circuit named in switchCircuits counts as named, not one matched by *")
+  void namedVersusWildcard() throws Exception {
+    SpanHomeConfig all = config("{\"panels\":[{\"serial\":\"a\"}]}");
+    assertFalse(all.isNamedInSwitchCircuits("Main", "Sub Zero", "x"));
+
+    SpanHomeConfig named = config("{\"panels\":[{\"serial\":\"a\"}],\"switchCircuits\":[\"Sub Zero\"]}");
+    assertTrue(named.isNamedInSwitchCircuits("Main", "Sub Zero", "x"));
+  }
+
+  @Test
   @DisplayName("an explicit switchCircuits list still limits switching to those circuits")
   void explicitList() throws Exception {
     SpanHomeConfig config = config("{\"panels\":[{\"serial\":\"a\"}],\"switchCircuits\":[\"Pool\"]}");
