@@ -18,23 +18,35 @@ Several panels share one bridge.
 | In Home | What it is | From the panel |
 | --- | --- | --- |
 | An **outlet** per circuit | On = relay closed (powered). "In use" = drawing ≥ 5 W. | `switch/relay`, `meter/active-power` |
-| **Watts, kWh, volts, amps** per circuit | Shown in the free **Eve** app, not Apple Home (Home has no power display) | `meter/*`, panel voltage |
+| **Watts** per circuit, in the Home app | A light sensor on each circuit, reading in "lux": 1,450 W shows as 1450 lux (see below) | `meter/active-power` |
+| **Panel and house power** | A "Main Power" and "Second Power" sensor per panel, plus "House Power" for all panels together, also in "lux" | sum of circuit draw |
+| **Watts, kWh, volts, amps**, properly labelled | In the free **Eve** app | `meter/*`, panel voltage |
 | A **"Grid"** contact sensor per panel with a battery | *Closed* on grid, *open* during an outage, so you can build "when the power goes out" automations | MID `grid/islanding-state` |
 | **Battery level** on that accessory | Charge %, charging state, low-battery alert below 20 % | BESS `soc/soc`, `power-flows/battery` |
 
-### Circuits are read-only unless you say otherwise
+### Why watts show as "lux"
 
-Turning a circuit "off" in Home cuts its power. A misheard Siri command or a bad automation
-shouldn't be able to switch off the fridge, so **every circuit is read-only by default**:
-it shows its state and power, and if someone taps it, it snaps back. List the circuits Home
-may switch in `switchCircuits`:
+Apple Home has no characteristic for power, so it cannot show watts anywhere. The common
+workaround, used here, is a light sensor whose reading is the wattage: Home shows the number
+with a "lux" label. It also works in automations ("when Pool rises above 1000"). Each circuit's
+light sensor is part of the circuit's accessory; long-press it and choose **Show as Separate
+Tiles** to see the reading on its own tile. Turn all of this off with `"showWattsInHome": false`
+and `"showPanelPower": false`, and use the Eve app instead.
+
+### Switching circuits
+
+Every circuit the panel allows switching can be switched from Home. Turning one off cuts its
+power, so list any that Home must never touch in `readOnlyCircuits`:
 
 ```json
-"switchCircuits": ["Hot Tub", "Second: EV Charger"]
+"readOnlyCircuits": ["Furnace", "Main: Sub Zero"]
 ```
 
-Match by circuit name, `"Panel: Circuit"` for one panel's circuit, the circuit's ID, or `"*"`
-for every circuit the panel allows switching. Circuits the panel itself won't switch (the
+Those still show their state and power, and snap back if tapped. To go the other way and allow
+only a few, set `switchCircuits` to just those, e.g. `["Pool", "Barn"]`.
+
+Match by circuit name, `"Panel: Circuit"` for one panel's circuit, or the circuit's ID;
+`switchCircuits` also takes `"*"` (the default). Circuits the panel itself won't switch (the
 commissioned solar and battery circuits, for instance) are always read-only.
 
 ## Requirements
@@ -95,7 +107,7 @@ Panel Main (nj-2410-00h2v) MAIN_32, firmware spanos3/r202633/04, 121 V
   Battery: 76%, discharging, on grid, ~10h12m backup
 ```
 
-Use the names exactly as listed in `switchCircuits` and `hiddenCircuits`.
+Use the names exactly as listed in `readOnlyCircuits`, `switchCircuits` and `hiddenCircuits`.
 
 **5. Run and pair.**
 
@@ -110,6 +122,67 @@ accessory" warning.
 For a permanent install, `span-home.service` is a systemd unit: copy it to
 `/etc/systemd/system/`, adjust the paths, and `systemctl enable --now span-home`.
 
+### Run at login on a Mac (launchd)
+
+To keep the bridge running in the background, starting at login and restarting if it crashes,
+install it as a launchd agent. Stop any copy running in a terminal first: two can't share the
+HomeKit port.
+
+**1. Create the agent.** From the repo folder, after `mvn package`, paste this whole block.
+It records where your Java is and writes the agent definition:
+
+```bash
+JAVA="$(which java)"
+DIR="$(pwd)"
+cat > ~/Library/LaunchAgents/io.github.chelin1974.spanhome.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>io.github.chelin1974.spanhome</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$JAVA</string>
+    <string>-jar</string>
+    <string>$DIR/target/span-home.jar</string>
+    <string>--config</string>
+    <string>$DIR/span-home.config.json</string>
+  </array>
+  <key>WorkingDirectory</key><string>$DIR</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$HOME/Library/Logs/span-home.log</string>
+  <key>StandardErrorPath</key><string>$HOME/Library/Logs/span-home.log</string>
+</dict>
+</plist>
+EOF
+```
+
+**2. Start it.**
+
+```bash
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.github.chelin1974.spanhome.plist
+```
+
+**3. Pair, if you haven't yet.** The setup code is in the log:
+
+```bash
+tail -f ~/Library/Logs/span-home.log
+```
+
+Press Ctrl-C to stop watching; the agent keeps running.
+
+| To | Run |
+| --- | --- |
+| Restart (after a config change or `mvn package`) | `launchctl kickstart -k gui/$(id -u)/io.github.chelin1974.spanhome` |
+| Stop and remove | `launchctl bootout gui/$(id -u)/io.github.chelin1974.spanhome` |
+| Check it's running | `launchctl print gui/$(id -u)/io.github.chelin1974.spanhome \| grep state` |
+| Read the log | `tail -50 ~/Library/Logs/span-home.log` |
+
+The agent runs only while you're logged in and the Mac is awake. A sleeping laptop, lid
+closed included, takes the accessories to "No Response" until it wakes. For an always-on
+setup, use a Mac mini or a Linux box with the systemd unit above.
+
 ## Configuration
 
 | Setting | Default | Notes |
@@ -117,9 +190,12 @@ For a permanent install, `span-home.service` is a systemd unit: copy it to
 | `panels[].serial` | — | Required. |
 | `panels[].host` | `span-<serial>.local` | An IP works too. |
 | `panels[].name` | the serial | Short label, used for `"Panel: Circuit"` matching and to tell same-named circuits apart. |
-| `switchCircuits` | none | Circuits Home may switch. See above. |
+| `switchCircuits` | `["*"]` (all) | Circuits Home may switch. See above. |
+| `readOnlyCircuits` | none | Circuits Home must never switch. Overrides `switchCircuits`. No `"*"`. |
 | `hiddenCircuits` | none | Circuits left out of Home. No `"*"` here. |
 | `showBattery` | `true` | Publish the Grid/battery accessory when a battery is commissioned. |
+| `showWattsInHome` | `true` | A watts light sensor on each circuit, so Home shows its draw. |
+| `showPanelPower` | `true` | Per-panel and whole-house power sensors. |
 | `bridgeName` | `SPAN` | Shown while pairing. |
 | `port` | `51828` | HomeKit port. Different from DaikinHome's, so both can run on one machine. |
 | `bindAddress` | chosen automatically | LAN IP to advertise on. Set it if the Home app can't find the bridge. |
@@ -132,8 +208,9 @@ For a permanent install, `span-home.service` is a systemd unit: copy it to
 | `span-home.state.json` | HomeKit pairing | Every accessory goes "No Response"; remove and re-add the bridge. |
 | `span-home.accessories.json` | A stable HomeKit ID per circuit | Rooms, names and automations are reset. |
 | `span-home.credentials.json` | Each panel's broker password and CA | Run `--register` again. |
+| `span-home.layout.json` | HomeKit's configuration number, raised when accessories change so iOS reloads them | Nothing: it is rebuilt on the next start. |
 
-All three are in `.gitignore`. The credentials file controls every breaker in the house:
+All of these are in `.gitignore`. The credentials file controls every breaker in the house:
 keep it owner-only.
 
 ## How it works
@@ -156,9 +233,13 @@ keep it owner-only.
 
 ## Known gaps
 
-- **Power readings live in the Eve app.** Apple Home has no characteristic for watts or kWh.
-  Eve shows live values; its history graphs need Eve's proprietary history service, which
-  this bridge doesn't implement.
+- **Watts in Home are labelled "lux".** See above; Eve labels them properly. Eve shows live
+  values only: its history graphs need Eve's proprietary history service, which this bridge
+  doesn't implement.
+- **The house total assumes neither panel feeds the other through a breaker.** It sums every
+  circuit's draw, which is exact when the second panel is fed from the first's feed-through lugs
+  or from the meter. If a breaker on one panel feeds the other, that panel's load counts twice
+  in "House Power".
 - **Battery has no Home tile of its own.** The level appears in the Grid accessory's details,
   and low-battery alerts work. Eve shows the level too.
 - **New circuits need a restart.** Accessories are built at startup.

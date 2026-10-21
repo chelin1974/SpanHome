@@ -7,7 +7,9 @@ import io.github.chelin1974.spanhome.homekit.BackupBattery;
 import io.github.chelin1974.spanhome.homekit.CircuitOutlet;
 import io.github.chelin1974.spanhome.homekit.FileAuthInfo;
 import io.github.chelin1974.spanhome.homekit.HomeKitNames;
+import io.github.chelin1974.spanhome.homekit.LayoutVersion;
 import io.github.chelin1974.spanhome.homekit.NetworkAddresses;
+import io.github.chelin1974.spanhome.homekit.PowerSensor;
 import io.github.chelin1974.spanhome.span.HomieTree;
 import io.github.chelin1974.spanhome.span.HomieTree.Device;
 import io.github.chelin1974.spanhome.span.PanelCredentials;
@@ -67,7 +69,11 @@ public final class SpanHomeBridge implements AutoCloseable {
       PanelCredentials.Panel panel =
           credentials.get(entry.serial.trim())
               .orElseThrow(() -> new ConfigException(
-                  "panel " + entry.serial + " is not registered yet. Run: java -jar span-home.jar --register"));
+                  "panel " + entry.serial + " is not registered yet (" + config.credentialsFile().toAbsolutePath()
+                      + (credentials.serials().isEmpty()
+                          ? " has no panels"
+                          : " has " + String.join(", ", credentials.serials()))
+                      + "). Run: java -jar span-home.jar --register --panel " + entry.serial.trim()));
       // A host in the config overrides the one saved at registration (say, a new DHCP lease).
       panel.host = entry.host();
 
@@ -120,6 +126,10 @@ public final class SpanHomeBridge implements AutoCloseable {
       accessories.addAll(buildPanel(connection, entry, ids, takenNames));
     }
 
+    if (config.showPanelPower) {
+      accessories.addAll(buildPowerSensors(ids, takenNames));
+    }
+
     if (accessories.size() > MAX_ACCESSORIES) {
       log.warn(
           "{} accessories exceed HomeKit's limit of {} per bridge; the last {} are left out. Hide some with hiddenCircuits.",
@@ -128,6 +138,7 @@ public final class SpanHomeBridge implements AutoCloseable {
     }
     accessories.forEach(bridge::addAccessory);
     ids.save();
+    bridge.setConfigurationIndex(LayoutVersion.resolve(config.layoutFile(), accessories));
 
     bridge.start();
     log.info("HomeKit bridge \"{}\" advertised at {}:{} with {} accessories",
@@ -140,6 +151,11 @@ public final class SpanHomeBridge implements AutoCloseable {
       log.info("  |  setup code:  {}                 |", authInfo.getPin());
       log.info("  +------------------------------------------+");
       log.info("");
+    } else {
+      log.info(
+          "already paired with Apple Home, so no setup code is shown. If the bridge is not in the"
+              + " Home app, stop it, delete {}, and start it again for a new code.",
+          config.statePath().toAbsolutePath());
     }
   }
 
@@ -178,7 +194,8 @@ public final class SpanHomeBridge implements AutoCloseable {
               tree,
               wanted && controllable,
               (id, closed) -> connection.set(id, "switch", "relay", closed ? "CLOSED" : "OPEN"),
-              scheduler);
+              scheduler,
+              config.showWattsInHome);
       outlets.put(circuit.id(), outlet);
       built.add(outlet);
       if (outlet.isSwitchable()) {
@@ -213,6 +230,33 @@ public final class SpanHomeBridge implements AutoCloseable {
     log.info("panel {}: {} circuits ({} switchable){}",
         label, outlets.size(), switchable, battery == null ? "" : ", plus battery backup");
     return built;
+  }
+
+  /**
+   * One power sensor per panel, plus a house total when there is more than one panel.
+   *
+   * <p>Totals are sums of circuit draw (see {@link SpanReadings#panelConsumptionWatts}), so the
+   * panel and house figures always agree with the per-circuit readings.
+   */
+  private List<HomekitAccessory> buildPowerSensors(AccessoryIds ids, List<String> takenNames) {
+    List<HomekitAccessory> sensors = new ArrayList<>();
+    for (int i = 0; i < connections.size(); i++) {
+      HomieTree tree = connections.get(i).tree();
+      String name = HomeKitNames.unique(HomeKitNames.clean(config.panels.get(i).label() + " Power", "Panel Power"), takenNames);
+      takenNames.add(name);
+      sensors.add(new PowerSensor(
+          ids.idFor("power:" + tree.rootId()), name, tree.rootId() + "-power",
+          () -> SpanReadings.panelConsumptionWatts(tree), scheduler));
+    }
+    if (connections.size() > 1) {
+      String name = HomeKitNames.unique("House Power", takenNames);
+      takenNames.add(name);
+      List<HomieTree> trees = connections.stream().map(SpanPanelConnection::tree).toList();
+      sensors.add(new PowerSensor(
+          ids.idFor("power:house"), name, "house-power",
+          () -> trees.stream().mapToDouble(SpanReadings::panelConsumptionWatts).sum(), scheduler));
+    }
+    return sensors;
   }
 
   public void awaitTermination() throws InterruptedException {

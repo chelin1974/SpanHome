@@ -122,6 +122,28 @@ public final class SpanReadings {
     return tree.number(circuitId, "meter", "current").map(Math::abs).orElse(0.0);
   }
 
+  /**
+   * Everything the panel's circuits are drawing right now, in watts.
+   *
+   * <p>The sum of each circuit's consumption. The circuits SPAN adds for a commissioned solar or
+   * battery system are left out: they feed the panel, or charge the battery, rather than power
+   * the house. Summing the panels' circuits gives the house total without double counting, as
+   * long as one panel is not fed from a breaker on the other.
+   */
+  public static double panelConsumptionWatts(HomieTree tree) {
+    double total = 0;
+    for (Device circuit : tree.ofType(HomieTree.TYPE_CIRCUIT)) {
+      if (!isCommissionedFeed(name(tree, circuit))) {
+        total += consumptionWatts(tree, circuit.id());
+      }
+    }
+    return total;
+  }
+
+  static boolean isCommissionedFeed(String circuitName) {
+    return circuitName.startsWith("Commissioned ");
+  }
+
   /** Average of the panel's two line voltages, or 0 when unknown. */
   public static double panelVoltage(HomieTree tree) {
     Optional<Double> a = tree.number(tree.rootId(), "meter", "voltage-a");

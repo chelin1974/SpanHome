@@ -18,15 +18,15 @@ import java.util.Locale;
  *     { "serial": "nj-2410-00h2v", "name": "Main" },
  *     { "serial": "nj-2410-00h35", "name": "Garage" }
  *   ],
- *   "switchCircuits": ["Hot Tub", "Garage: EV Charger"],
+ *   "readOnlyCircuits": ["Furnace", "Main: Sub Zero"],
  *   "hiddenCircuits": ["Spare"]
  * }
  * }</pre>
  *
- * <p>Circuits are <b>read-only by default</b>. Turning a circuit off from Home cuts its power,
- * so a misheard Siri command or a bad automation should not be able to switch off the fridge.
- * Only circuits named in {@code switchCircuits} accept on/off commands; every other circuit
- * still shows its state and power, and snaps back if someone taps it.
+ * <p>Every circuit the panel allows switching is <b>switchable by default</b>. Turning one off
+ * from Home cuts its power, so list any that Home must never switch (a fridge, the furnace) in
+ * {@code readOnlyCircuits}. To go the other way and allow only a few, set
+ * {@code switchCircuits} to just those.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public final class SpanHomeConfig {
@@ -66,13 +66,22 @@ public final class SpanHomeConfig {
    * Circuits Home may switch: a circuit name, {@code "Panel: Name"} for one panel's circuit,
    * a circuit ID, or {@code "*"} for every controllable circuit. Case-insensitive.
    */
-  public List<String> switchCircuits = new ArrayList<>();
+  public List<String> switchCircuits;
+
+  /** Circuits Home must never switch, even when {@code switchCircuits} would allow it. */
+  public List<String> readOnlyCircuits = new ArrayList<>();
 
   /** Circuits left out of Home entirely, matched the same way. */
   public List<String> hiddenCircuits = new ArrayList<>();
 
   /** Publish a backup-battery accessory when a panel has a battery commissioned. */
   public Boolean showBattery = true;
+
+  /** Show each circuit's watts in the Home app, as a light sensor reading in "lux". */
+  public Boolean showWattsInHome = true;
+
+  /** Publish each panel's total draw, and the whole house's, as power sensors. */
+  public Boolean showPanelPower = true;
 
   public String bridgeName = "SPAN";
   public Integer port = DEFAULT_PORT;
@@ -123,7 +132,17 @@ public final class SpanHomeConfig {
       bridgeName = "SPAN";
     }
     if (switchCircuits == null) {
-      switchCircuits = new ArrayList<>();
+      // Not given: every circuit the panel allows switching.
+      switchCircuits = new ArrayList<>(List.of("*"));
+    }
+    if (readOnlyCircuits == null) {
+      readOnlyCircuits = new ArrayList<>();
+    }
+    if (showWattsInHome == null) {
+      showWattsInHome = true;
+    }
+    if (showPanelPower == null) {
+      showPanelPower = true;
     }
     if (hiddenCircuits == null) {
       hiddenCircuits = new ArrayList<>();
@@ -142,6 +161,11 @@ public final class SpanHomeConfig {
     return resolve(accessoryIdsPath, "span-home.accessories.json");
   }
 
+  /** HomeKit configuration number and the layout it describes. Safe to delete. */
+  public Path layoutFile() {
+    return resolve(null, "span-home.layout.json");
+  }
+
   private Path resolve(String configured, String fallback) {
     return baseDirectory.resolve(isBlank(configured) ? fallback : configured.trim());
   }
@@ -149,7 +173,8 @@ public final class SpanHomeConfig {
   // ------------------------------------------------------------- matching
 
   public boolean isSwitchable(String panelLabel, String circuitName, String circuitId) {
-    return matches(switchCircuits, panelLabel, circuitName, circuitId, true);
+    return matches(switchCircuits, panelLabel, circuitName, circuitId, true)
+        && !matches(readOnlyCircuits, panelLabel, circuitName, circuitId, false);
   }
 
   public boolean isHidden(String panelLabel, String circuitName, String circuitId) {

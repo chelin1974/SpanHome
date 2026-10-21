@@ -107,6 +107,8 @@ public final class Main {
           failures++;
           continue;
         }
+        // Saved under the serial exactly as the panel reports it: its MQTT topics use that
+        // spelling. Lookups ignore case, so the config may write it either way.
         credentials.put(panel);
         System.err.println("  Registered. Credentials saved to " + credentials.file().toAbsolutePath());
       } catch (RegistrationException e) {
@@ -153,6 +155,7 @@ public final class Main {
               SpanReadings.relay(tree, circuit.id()),
               mode);
         }
+        System.out.printf("  Panel draw: %.0f W%n", SpanReadings.panelConsumptionWatts(tree));
         SpanReadings.battery(tree).ifPresentOrElse(
             bess -> System.out.printf("  Battery: %s%%, %s, %s%s%n",
                 SpanReadings.stateOfCharge(tree, bess.id()).map(String::valueOf).orElse("?"),
@@ -160,6 +163,11 @@ public final class Main {
                 SpanReadings.grid(tree).toString().toLowerCase().replace('_', ' '),
                 SpanReadings.backupMinutesRemaining(tree).map(m -> String.format(", ~%dh%02dm backup", m / 60, m % 60)).orElse("")),
             () -> System.out.println("  No battery commissioned."));
+      }
+      if (connections.size() > 1) {
+        System.out.println();
+        System.out.printf("House draw: %.0f W%n",
+            connections.stream().mapToDouble(c -> SpanReadings.panelConsumptionWatts(c.tree())).sum());
       }
     } finally {
       connections.forEach(SpanPanelConnection::close);

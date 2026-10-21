@@ -4,10 +4,12 @@
     { "serial": "nj-2410-00h35", "name": "Second" }
   ],
 
-  "switchCircuits": [],
+  "readOnlyCircuits": [],
   "hiddenCircuits": [],
 
   "showBattery": true,
+  "showWattsInHome": true,
+  "showPanelPower": true,
   "bridgeName": "SPAN",
   "port": 51828
 }

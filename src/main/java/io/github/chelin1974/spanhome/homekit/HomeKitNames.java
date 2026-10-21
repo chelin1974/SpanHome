@@ -17,7 +17,9 @@ public final class HomeKitNames {
   private HomeKitNames() {}
 
   public static String clean(String raw, String fallback) {
-    String cleaned = raw == null ? "" : raw.replaceAll("[^\\p{L}\\p{N} '.,\\-]", " ");
+    // Curly quotes are common in names typed on a phone ("Maya’s Room"); HomeKit only takes '.
+    String cleaned = raw == null ? "" : raw.replaceAll("[\u2018\u2019\u02BC]", "'");
+    cleaned = cleaned.replaceAll("[^\\p{L}\\p{N} '.,\\-]", " ");
     cleaned = cleaned.replaceAll("\\s+", " ");
     cleaned = cleaned.replaceAll("^[^\\p{L}\\p{N}]+", "").replaceAll("[^\\p{L}\\p{N}]+$", "");
     if (cleaned.length() > 64) {

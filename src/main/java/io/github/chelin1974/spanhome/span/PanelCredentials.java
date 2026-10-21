@@ -10,6 +10,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
@@ -69,8 +71,25 @@ public final class PanelCredentials {
     }
   }
 
+  /**
+   * The entry for {@code serial}, ignoring case: a panel can report its serial in a different
+   * case from the one printed in the SPAN app or typed into the config.
+   */
   public Optional<Panel> get(String serial) {
-    return Optional.ofNullable(panels.get(serial));
+    String wanted = key(serial);
+    return panels.entrySet().stream()
+        .filter(e -> key(e.getKey()).equals(wanted))
+        .map(Map.Entry::getValue)
+        .findFirst();
+  }
+
+  /** Registered serials, for an error message. Never includes secrets. */
+  public List<String> serials() {
+    return List.copyOf(panels.keySet());
+  }
+
+  private static String key(String serial) {
+    return serial == null ? "" : serial.trim().toLowerCase(Locale.ROOT);
   }
 
   public Path file() {
@@ -79,6 +98,8 @@ public final class PanelCredentials {
 
   /** Adds or replaces one panel and writes the file atomically, owner-only. */
   public synchronized void put(Panel panel) {
+    // Replace any entry for the same panel saved under a different case.
+    panels.keySet().removeIf(existing -> key(existing).equals(key(panel.serial)));
     panels.put(panel.serial, panel);
     FileShape shape = new FileShape();
     shape.panels.putAll(panels);

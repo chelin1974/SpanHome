@@ -147,8 +147,11 @@ public final class BackupBattery implements ContactSensorAccessory, BatteryAcces
     if (services == null) {
       ContactSensorService grid = new ContactSensorService(this);
       BatteryService battery = new BatteryService(this);
+      // Only the grid sensor is listed: HAP-Java registers linked services itself, so
+      // listing the battery too would register it twice, and iOS then rejects the whole
+      // accessory list ("Duplicate key BatteryService").
       grid.addLinkedService(battery);
-      services = List.of(grid, battery);
+      services = List.of(grid);
     }
     return services;
   }

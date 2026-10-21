@@ -6,6 +6,7 @@ span-home.config.json
 span-home.credentials.json
 span-home.state.json
 span-home.accessories.json
+span-home.layout.json
 
 .idea/
 *.iml

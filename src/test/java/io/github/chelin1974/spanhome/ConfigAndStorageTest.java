@@ -25,10 +25,34 @@ class ConfigAndStorageTest {
   }
 
   @Test
-  @DisplayName("circuits are read-only unless named in switchCircuits")
-  void readOnlyByDefault() throws Exception {
+  @DisplayName("every circuit is switchable when switchCircuits is not given")
+  void switchableByDefault() throws Exception {
     SpanHomeConfig config = config("{\"panels\":[{\"serial\":\"nj-2410-00h2v\"}]}");
-    assertFalse(config.isSwitchable("Main", "Hot Tub", "abc"));
+    assertTrue(config.isSwitchable("Main", "Hot Tub", "abc"));
+    assertTrue(config.showWattsInHome);
+    assertTrue(config.showPanelPower);
+  }
+
+  @Test
+  @DisplayName("readOnlyCircuits overrides switchCircuits, but has no wildcard")
+  void readOnlyExceptions() throws Exception {
+    SpanHomeConfig config =
+        config("{\"panels\":[{\"serial\":\"a\"}],\"readOnlyCircuits\":[\"Furnace\",\"Main: Sub Zero\"]}");
+    assertFalse(config.isSwitchable("Main", "Furnace", "x"));
+    assertFalse(config.isSwitchable("Main", "Sub Zero", "x"));
+    assertTrue(config.isSwitchable("Second", "Sub Zero", "x"));
+    assertTrue(config.isSwitchable("Main", "Oven", "x"));
+
+    SpanHomeConfig star = config("{\"panels\":[{\"serial\":\"a\"}],\"readOnlyCircuits\":[\"*\"]}");
+    assertTrue(star.isSwitchable("Main", "Oven", "x"));
+  }
+
+  @Test
+  @DisplayName("an explicit switchCircuits list still limits switching to those circuits")
+  void explicitList() throws Exception {
+    SpanHomeConfig config = config("{\"panels\":[{\"serial\":\"a\"}],\"switchCircuits\":[\"Pool\"]}");
+    assertTrue(config.isSwitchable("Main", "Pool", "x"));
+    assertFalse(config.isSwitchable("Main", "Oven", "x"));
   }
 
   @Test
@@ -101,12 +125,33 @@ class ConfigAndStorageTest {
   }
 
   @Test
+  @DisplayName("credentials are found whatever case the panel reported its serial in")
+  void credentialsIgnoreCase() throws Exception {
+    Path file = Files.createTempDirectory("span").resolve("creds.json");
+    PanelCredentials.Panel panel = new PanelCredentials.Panel();
+    panel.serial = "NJ-2410-00H2V";
+    panel.brokerPassword = "pw";
+    PanelCredentials.load(file).put(panel);
+
+    PanelCredentials loaded = PanelCredentials.load(file);
+    assertTrue(loaded.get("nj-2410-00h2v").isPresent());
+
+    PanelCredentials.Panel again = new PanelCredentials.Panel();
+    again.serial = "nj-2410-00h2v";
+    again.brokerPassword = "pw2";
+    loaded.put(again);
+    assertEquals(List.of("nj-2410-00h2v"), PanelCredentials.load(file).serials(), "no duplicate entry");
+  }
+
+  @Test
   @DisplayName("names are cleaned to what HomeKit accepts")
   void names() {
     assertEquals("Hot Tub", HomeKitNames.clean("  Hot Tub ", "x"));
     assertEquals("EV Charger 50A", HomeKitNames.clean("EV Charger (50A)", "x"));
     assertEquals("Kitchen - Fridge", HomeKitNames.clean("Kitchen / - Fridge!", "x").replaceAll("\\s+", " "));
     assertEquals("Circuit 7", HomeKitNames.clean("***", "Circuit 7"));
+    assertEquals("Maya's Room", HomeKitNames.clean("Maya\u2019s Room", "x"));
+    assertEquals("Outlets Laundry", HomeKitNames.clean("Outlets / Laundry", "x"));
     assertEquals("Lights 2", HomeKitNames.unique("Lights", List.of("lights")));
   }
 
