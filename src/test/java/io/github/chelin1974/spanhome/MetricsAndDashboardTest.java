@@ -196,6 +196,30 @@ class MetricsAndDashboardTest {
   }
 
   @Test
+  @DisplayName("a combined circuit is one dashboard entry with both legs' spaces and summed watts")
+  void combinedEntry() throws Exception {
+    CircuitOutlet garage = new CircuitOutlet(9, List.of(HOT_TUB, FRIDGE), "Garage", PANEL, tree, true,
+        (id, on) -> commands.add(id + "=" + (on ? "CLOSED" : "OPEN")), scheduler);
+    DashboardModel combined = new DashboardModel(List.of(new PanelSource("Main", tree,
+        Map.of(HOT_TUB, garage, FRIDGE, garage), Set.of(), connected::get)));
+    @SuppressWarnings("unchecked")
+    Map<String, Object> panel = (Map<String, Object>) ((List<Object>) combined.state(true).get("panels")).get(0);
+    List<Map<String, Object>> entries = new java.util.ArrayList<>();
+    for (Object o : (List<Object>) panel.get("circuits")) {
+      @SuppressWarnings("unchecked")
+      Map<String, Object> c = (Map<String, Object>) o;
+      if (c.get("id").equals(HOT_TUB) || c.get("id").equals(FRIDGE)) entries.add(c);
+    }
+    assertEquals(1, entries.size());
+    Map<String, Object> c = entries.get(0);
+    assertEquals("Garage", c.get("name"));
+    assertEquals(List.of(HOT_TUB, FRIDGE), c.get("legs"));
+    assertEquals(Math.round(garage.watts() * 10) / 10.0, (Double) c.get("watts"), 1e-9);
+    assertEquals(DashboardModel.RelayResult.OK, combined.setRelay(FRIDGE, false));
+    assertEquals(List.of(HOT_TUB + "=OPEN", FRIDGE + "=OPEN"), commands);
+  }
+
+  @Test
   @DisplayName("state carries each circuit's room from the config, null when it has none")
   void rooms() {
     DashboardModel withRooms = new DashboardModel(model.panels(),

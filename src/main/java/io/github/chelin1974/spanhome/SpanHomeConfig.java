@@ -83,6 +83,13 @@ public final class SpanHomeConfig {
    */
   public Map<String, List<String>> rooms = new LinkedHashMap<>();
 
+  /**
+   * Circuits that together feed one load, shown and switched as one: the name to use, to the
+   * circuits (legs), matched like the other lists. For a 240 V load wired through two
+   * single-pole breakers: {@code {"Garage": ["Second: Garage", "Second: Garage 2"]}}.
+   */
+  public Map<String, List<String>> combinedCircuits = new LinkedHashMap<>();
+
   /** Publish a backup-battery accessory when a panel has a battery commissioned. */
   public Boolean showBattery = true;
 
@@ -194,6 +201,15 @@ public final class SpanHomeConfig {
     if (rooms == null) {
       rooms = new LinkedHashMap<>();
     }
+    if (combinedCircuits == null) {
+      combinedCircuits = new LinkedHashMap<>();
+    }
+    for (Map.Entry<String, List<String>> combined : combinedCircuits.entrySet()) {
+      if (isBlank(combined.getKey()) || combined.getValue() == null || combined.getValue().size() < 2) {
+        throw new ConfigException(
+            "combinedCircuits: \"" + combined.getKey() + "\" needs a name and at least two circuits.");
+      }
+    }
   }
 
   /** The Prometheus base URL, when configured. */
@@ -256,6 +272,16 @@ public final class SpanHomeConfig {
 
   public boolean isHidden(String panelLabel, String circuitName, String circuitId) {
     return matches(hiddenCircuits, panelLabel, circuitName, circuitId, false);
+  }
+
+  /** The {@code combinedCircuits} name this circuit is a leg of, or null. */
+  public String combinedNameOf(String panelLabel, String circuitName, String circuitId) {
+    for (Map.Entry<String, List<String>> combined : combinedCircuits.entrySet()) {
+      if (matches(combined.getValue(), panelLabel, circuitName, circuitId, false)) {
+        return combined.getKey().trim();
+      }
+    }
+    return null;
   }
 
   /** The first room in {@code rooms} that lists this circuit, or null. */

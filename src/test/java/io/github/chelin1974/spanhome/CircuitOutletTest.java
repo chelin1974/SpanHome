@@ -43,6 +43,47 @@ class CircuitOutletTest {
         scheduler);
   }
 
+  private CircuitOutlet combined(java.util.Set<String> failing) {
+    return new CircuitOutlet(
+        2, List.of(HOT_TUB, PanelFixture.FRIDGE), "Garage", PANEL, tree, true,
+        (id, closed) -> {
+          if (failing.contains(id)) {
+            throw new IllegalStateException("refused");
+          }
+          commands.add(id + "=" + (closed ? "CLOSED" : "OPEN"));
+        },
+        scheduler);
+  }
+
+  @Test
+  @DisplayName("a combined circuit switches every leg, sums watts, and is on while any leg is on")
+  void combinedSwitchesTogether() throws Exception {
+    CircuitOutlet outlet = combined(java.util.Set.of());
+    assertTrue(outlet.isCombined());
+    double sum = io.github.chelin1974.spanhome.span.SpanReadings.consumptionWatts(tree, HOT_TUB)
+        + io.github.chelin1974.spanhome.span.SpanReadings.consumptionWatts(tree, PanelFixture.FRIDGE);
+    assertEquals(sum, outlet.watts(), 1e-9);
+
+    outlet.setPowerState(false);
+    assertEquals(List.of(HOT_TUB + "=OPEN", PanelFixture.FRIDGE + "=OPEN"), commands);
+
+    tree.accept("ebus/5/" + HOT_TUB + "/switch/relay", "OPEN");
+    tree.accept("ebus/5/" + PanelFixture.FRIDGE + "/switch/relay", "CLOSED");
+    outlet.propertyChanged("switch", "relay");
+    assertTrue(outlet.getPowerState().get(), "one leg still live counts as on");
+    tree.accept("ebus/5/" + PanelFixture.FRIDGE + "/switch/relay", "OPEN");
+    assertFalse(outlet.getPowerState().get());
+  }
+
+  @Test
+  @DisplayName("when a leg can't be switched, the legs already switched are put back")
+  void combinedRollsBack() throws Exception {
+    CircuitOutlet outlet = combined(java.util.Set.of(PanelFixture.FRIDGE));
+    outlet.setPowerState(false);
+    assertEquals(List.of(HOT_TUB + "=OPEN", HOT_TUB + "=CLOSED"), commands);
+    assertTrue(outlet.getPowerState().get(), "shows the real state, not the request");
+  }
+
   @Test
   @DisplayName("on reflects the relay, and in-use reflects the load")
   void reads() throws Exception {

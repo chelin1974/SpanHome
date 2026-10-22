@@ -71,9 +71,33 @@ public final class DashboardModel {
       house += draw;
 
       List<Object> circuits = new ArrayList<>();
-      for (Device circuit : SpanReadings.circuits(tree)) {
+      List<Device> all = SpanReadings.circuits(tree);
+      for (Device circuit : all) {
         CircuitOutlet outlet = panel.outlets().get(circuit.id());
         Map<String, Object> c = new LinkedHashMap<>();
+        if (outlet != null && outlet.isCombined()) {
+          // One entry for the whole combined circuit, under its first leg.
+          if (!circuit.id().equals(outlet.circuitId())) {
+            continue;
+          }
+          List<Device> legs = all.stream().filter(d -> outlet.legs().contains(d.id())).toList();
+          String room = rooms.roomOf(panel.label(), outlet.displayName(), circuit.id());
+          for (int i = 0; room == null && i < legs.size(); i++) {
+            room = rooms.roomOf(panel.label(), SpanReadings.name(tree, legs.get(i)), legs.get(i).id());
+          }
+          c.put("id", circuit.id());
+          c.put("name", outlet.displayName());
+          c.put("spaces", legs.stream().flatMap(d -> spaces(SpanReadings.spaces(tree, d.id())).stream()).sorted().toList());
+          c.put("watts", round1(outlet.watts()));
+          c.put("on", outlet.relayClosed());
+          c.put("hidden", false);
+          c.put("room", room);
+          c.put("locked", legs.stream().anyMatch(d -> !SpanReadings.relayControllable(tree, d)));
+          c.put("switchable", outlet.isSwitchable());
+          c.put("legs", outlet.legs());
+          circuits.add(c);
+          continue;
+        }
         c.put("id", circuit.id());
         c.put("name", outlet != null ? outlet.displayName() : SpanReadings.name(tree, circuit));
         c.put("spaces", spaces(SpanReadings.spaces(tree, circuit.id())));

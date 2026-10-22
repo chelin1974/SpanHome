@@ -6,6 +6,9 @@
 
   "readOnlyCircuits": [],
   "hiddenCircuits": [],
+  "combinedCircuits": {
+    "Garage": ["Second: Garage", "Second: Garage 2"]
+  },
   "rooms": {
     "Kitchen": ["Oven", "Dishwasher", "Main: Kitchen Outlets"],
     "Garage": ["EV Charger"]

@@ -286,7 +286,16 @@ min_over_time(span_grid_connected[7d]) == 0               # any outage this week
 | `switchCircuits` | `["*"]` (all) | Circuits Home may switch. See above. |
 | `readOnlyCircuits` | none | Circuits Home must never switch. Overrides `switchCircuits`. No `"*"`. |
 | `hiddenCircuits` | none | Circuits left out of Home. No `"*"` here. |
+| `combinedCircuits` | none | Circuits that feed one load, shown and switched as one: `{"Garage": ["Second: Garage", "Second: Garage 2"]}`. See below. |
 | `rooms` | none | Room name to its circuits, for the dashboard's room sort, e.g. `{"Kitchen": ["Oven", "Dishwasher"]}`. Matched like the lists above. |
+
+**Combined circuits.** A 240 V load wired through two single-pole breakers shows up as two
+circuits, because that's how the panel reports it. `combinedCircuits` makes it one: one outlet
+and one Power tile in Home, one breaker on the dashboard. Its watts are the sum of its legs, it's
+on while any leg is on, and switching it switches every leg. If a leg can't be switched, the
+bridge switches the others back, so the load is never left on one leg. It's switchable only if
+every leg is. In Home it keeps the first leg's accessory, with its room and scenes; the other
+legs' accessories go away. Prometheus still records each leg on its own.
 
 In all of these lists a name ending in `*` matches every circuit whose name starts with the rest,
 which helps with long names: `"Master bed*"`, or `"Second: Lights*"` for one panel only.

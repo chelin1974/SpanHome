@@ -401,10 +401,19 @@ $("sheetCancel").onclick = () => { $("sheetBack").hidden = true; sheetDone = nul
 
 // ----------------------------------------------------------------- graphs
 
-function seriesFor(key, current) {
-  const s = history && history.available && history.series ? history.series[key] : null;
-  if (!s) return null;
-  const pts = s.slice();
+function seriesFor(key, current, legs) {
+  const all = history && history.available && history.series ? history.series : null;
+  if (!all) return null;
+  let pts;
+  if (legs && legs.length > 1) {
+    // A combined circuit: Prometheus keeps each leg; the graph is their sum.
+    const parts = legs.map(id => all[id]).filter(Boolean);
+    if (!parts.length) return null;
+    pts = parts[0].map((_, i) => parts.some(p => p[i] != null) ? parts.reduce((a, p) => a + (p[i] ?? 0), 0) : null);
+  } else {
+    if (!all[key]) return null;
+    pts = all[key].slice();
+  }
   pts[pts.length - 1] = current;     // end on the live reading
   return pts;
 }
@@ -476,7 +485,7 @@ function breakerEl(c, p, where) {
   el.setAttribute("aria-pressed", String(c.on));
   el.setAttribute("aria-label", `${c.name}, ${p.label} panel, space ${c.spaces.join(" and ")}, ${fmt(draw(c))} watts, ${c.on ? "on" : "off"}`);
   if (c.hidden) el.disabled = true;
-  const pts = seriesFor(c.id, draw(c));
+  const pts = seriesFor(c.id, draw(c), c.legs);
   let graph = "", peakText = "no history yet";
   if (pts) {
     const spark = sparkSvg(pts), peak = Math.max(...pts.filter(v => v != null));
@@ -489,7 +498,7 @@ function breakerEl(c, p, where) {
     <span class="name">${esc(c.name)}</span>
     <span class="toggle" aria-hidden="true"></span>
     ${where ? `<span class="row2"><span class="where">${where}</span></span>` : ""}
-    <span class="row2">${where ? "" : `<span class="space">${c.spaces.join("·")}</span>`}<span class="pk">${peakText}</span><span class="w">${fmt(draw(c))} W</span></span>
+    <span class="row2">${where ? "" : `<span class="space">${c.spaces.join("·")}${c.legs && c.legs.length > 1 ? " · combined" : ""}</span>`}<span class="pk">${peakText}</span><span class="w">${fmt(draw(c))} W</span></span>
     ${tag ? `<span class="row2"><span class="tag">${tag}</span></span>` : ""}
     ${armed === c.id ? '<span class="arm-note">Tap again to cut power</span>' : ""}`;
   el.addEventListener("click", () => press(c, p));
@@ -551,7 +560,7 @@ function panelSection(p) {
   const sec = document.createElement("section");
   sec.className = "panel";
   const circuits = circuitsOf(p), shown = circuits.filter(counted);
-  const meta = [p.serial, p.model && p.model.replace("_", " "), p.firmware, `${shown.length} circuits`,
+  const meta = [p.serial, p.model && p.model.replace("_", " "), p.firmware, `${shown.length} circuit${shown.length === 1 ? "" : "s"}`,
     `${fmt(shown.reduce((a, c) => a + draw(c), 0))} W`, p.volts ? `${Math.round(p.volts)} V` : null].filter(Boolean).join(" · ");
   sec.innerHTML = `<div class="panel-head"><h2>${esc(p.label)} panel</h2><span class="meta">${esc(meta)}</span></div><div class="board"></div>`;
   const board = sec.querySelector(".board");
@@ -560,10 +569,20 @@ function panelSection(p) {
   for (const c of circuits) {
     if (!c.spaces.length) continue;
     c.spaces.forEach(s => { used.add(s); maxSpace = Math.max(maxSpace, s); });
+    // Two-pole breakers sit in one column (spaces n and n+2). Legs of a combined circuit may
+    // not: then the circuit sits at its first space and the others point to it.
+    const run = c.spaces.every((s, i) => i === 0 || s === c.spaces[i - 1] + 2) ? c.spaces.length : 1;
     const first = slotFor(c.spaces[0]), el = breakerEl(c, p, "");
     el.style.gridColumn = first.col;
-    el.style.gridRow = `${first.row} / span ${c.spaces.length}`;
+    el.style.gridRow = `${first.row} / span ${run}`;
     board.appendChild(el);
+    for (const s of c.spaces.slice(run)) {
+      const pos = slotFor(s), part = document.createElement("div");
+      part.className = "breaker empty";
+      part.style.gridColumn = pos.col; part.style.gridRow = pos.row;
+      part.innerHTML = `<span class="name">Part of ${esc(c.name)}</span><span class="row2"><span class="space">${s}</span></span>`;
+      board.appendChild(part);
+    }
   }
   const last = maxSpace <= 16 ? 16 : maxSpace <= 24 ? 24 : maxSpace <= 32 ? 32 : maxSpace + (maxSpace % 2);
   for (let s = 1; s <= last; s++) {

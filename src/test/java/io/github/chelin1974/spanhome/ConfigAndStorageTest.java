@@ -37,6 +37,18 @@ class ConfigAndStorageTest {
   }
 
   @Test
+  @DisplayName("combinedCircuits names a circuit's group, and needs at least two circuits per entry")
+  void combinedCircuits() throws Exception {
+    SpanHomeConfig config = config("{\"panels\":[{\"serial\":\"nj-2410-00h2v\"}],"
+        + "\"combinedCircuits\":{\"Garage\":[\"Second: Garage\",\"Second: Garage 2\"]}}");
+    assertEquals("Garage", config.combinedNameOf("Second", "Garage 2", "x"));
+    assertEquals("Garage", config.combinedNameOf("Second", "Garage", "y"));
+    assertEquals(null, config.combinedNameOf("Main", "Garage", "y"));
+    assertThrows(ConfigException.class, () -> config("{\"panels\":[{\"serial\":\"nj-2410-00h2v\"}],"
+        + "\"combinedCircuits\":{\"Garage\":[\"Garage\"]}}"));
+  }
+
+  @Test
   @DisplayName("a trailing * matches names starting with the rest, optionally on one panel")
   void prefixMatch() throws Exception {
     SpanHomeConfig config = config("{\"panels\":[{\"serial\":\"nj-2410-00h2v\"}],"

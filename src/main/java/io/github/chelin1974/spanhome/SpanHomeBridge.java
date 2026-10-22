@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -207,48 +208,82 @@ public final class SpanHomeBridge implements AutoCloseable {
     List<HomekitAccessory> built = new ArrayList<>();
     int switchable = 0;
 
+    // Each unit becomes one outlet: a single circuit, or the legs of a combinedCircuits entry.
+    List<List<Device>> units = new ArrayList<>();
+    Map<String, List<Device>> combined = new LinkedHashMap<>();
     for (Device circuit : SpanReadings.circuits(tree)) {
       String name = SpanReadings.name(tree, circuit);
       if (config.isHidden(label, name, circuit.id())) {
         continue;
       }
-      boolean wanted = config.isSwitchable(label, name, circuit.id());
-      boolean controllable = SpanReadings.relayControllable(tree, circuit);
+      String combinedName = config.combinedNameOf(label, name, circuit.id());
+      if (combinedName == null) {
+        units.add(List.of(circuit));
+      } else {
+        combined.computeIfAbsent(combinedName, k -> {
+          List<Device> legs = new ArrayList<>();
+          units.add(legs);
+          return legs;
+        }).add(circuit);
+      }
+    }
+    combined.forEach((combinedName, legs) -> {
+      if (legs.size() < 2) {
+        log.warn("combinedCircuits \"{}\" matched only \"{}\" on panel {}; it stays a circuit of its own.",
+            combinedName, SpanReadings.name(tree, legs.get(0)), label);
+      }
+    });
+
+    for (List<Device> unit : units) {
+      Device circuit = unit.get(0);
+      String name = SpanReadings.name(tree, circuit);
+      String combinedName = unit.size() > 1 ? config.combinedNameOf(label, name, circuit.id()) : null;
+      boolean wanted = unit.stream().allMatch(leg -> config.isSwitchable(label, SpanReadings.name(tree, leg), leg.id()));
+      boolean controllable = unit.stream().allMatch(leg -> SpanReadings.relayControllable(tree, leg));
       // Only worth saying when the circuit was named: under the "*" default, circuits the panel
       // will not switch are expected, and listing them on every start is noise.
       if (wanted && !controllable && config.isNamedInSwitchCircuits(label, name, circuit.id())) {
         log.info("\"{}\" is in switchCircuits, but the panel does not allow switching it; it will be read-only.", name);
       }
 
-      String display = HomeKitNames.clean(name, "Circuit " + SpanReadings.spaces(tree, circuit.id()));
+      String display = combinedName != null
+          ? HomeKitNames.clean(combinedName, name)
+          : HomeKitNames.clean(name, "Circuit " + SpanReadings.spaces(tree, circuit.id()));
       if (takenNames.stream().anyMatch(display::equalsIgnoreCase) && config.panels.size() > 1) {
         display = HomeKitNames.clean(label + " " + display, display);
       }
       display = HomeKitNames.unique(display, takenNames);
       takenNames.add(display);
 
+      // A combined circuit keeps its first leg's accessory ID, so Home keeps that accessory's
+      // room and scenes; the other legs' accessories go away.
+      List<String> legIds = unit.stream().map(Device::id).toList();
       CircuitOutlet outlet =
           new CircuitOutlet(
               ids.idFor(circuit.id()),
-              circuit.id(),
+              legIds,
               display,
               tree.rootId(),
               tree,
               wanted && controllable,
               (id, closed) -> connection.set(id, "switch", "relay", closed ? "CLOSED" : "OPEN"),
               scheduler);
-      outlets.put(circuit.id(), outlet);
+      legIds.forEach(id -> outlets.put(id, outlet));
       built.add(outlet);
+      if (outlet.isCombined()) {
+        log.info("\"{}\" combines {} (spaces {})", display,
+            unit.stream().map(leg -> "\"" + SpanReadings.name(tree, leg) + "\"").collect(java.util.stream.Collectors.joining(" and ")),
+            unit.stream().map(leg -> SpanReadings.spaces(tree, leg.id())).collect(java.util.stream.Collectors.joining(", ")));
+      }
 
       // Its own accessory, so the Home app gives the reading a tile of its own next to the
       // switch. As a second service on the outlet, Home would fold it into the switch's tile.
       if (config.showWattsInHome) {
         String powerName = HomeKitNames.unique(HomeKitNames.clean(display + " Power", display), takenNames);
         takenNames.add(powerName);
-        String circuitId = circuit.id();
         built.add(new PowerSensor(
-            ids.idFor("power:" + circuitId), powerName, circuitId + "-power",
-            () -> SpanReadings.consumptionWatts(tree, circuitId), scheduler));
+            ids.idFor("power:" + circuit.id()), powerName, circuit.id() + "-power",
+            outlet::watts, scheduler));
       }
       if (outlet.isSwitchable()) {
         switchable++;
@@ -288,7 +323,7 @@ public final class SpanHomeBridge implements AutoCloseable {
     });
 
     log.info("panel {}: {} circuits ({} switchable){}",
-        label, outlets.size(), switchable, battery == null ? "" : ", plus battery backup");
+        label, units.size(), switchable, battery == null ? "" : ", plus battery backup");
     return built;
   }
 

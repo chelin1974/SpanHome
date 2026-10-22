@@ -10,6 +10,7 @@ import io.github.hapjava.services.Service;
 import io.github.hapjava.services.impl.OutletService;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
@@ -32,6 +33,12 @@ import org.slf4j.LoggerFactory;
  * let anyone switch, ignores taps and snaps back to its real state. HAP-Java swallows setter
  * errors, so snapping back is the only feedback the Home app can show.
  *
+ * <p>One outlet can also stand for several circuits that together feed one load, such as a
+ * 240 V circuit built from two single-pole breakers ({@code combinedCircuits} in the config).
+ * Its legs switch together, its watts are their sum, and it shows as on while any leg is on.
+ * If a leg can't be switched, the legs already switched are put back, so a 240 V load is never
+ * left with one leg live.
+ *
  * <p>Reads never block: every value comes from the {@link HomieTree}, which the MQTT
  * connection keeps current.
  */
@@ -53,6 +60,7 @@ public final class CircuitOutlet implements OutletAccessory, AccessoryWithName {
 
   private final int id;
   private final String circuitId;
+  private final List<String> legs;
   private final String displayName;
   private final String panelSerial;
   private final HomieTree tree;
@@ -81,8 +89,25 @@ public final class CircuitOutlet implements OutletAccessory, AccessoryWithName {
       boolean switchable,
       RelayControl control,
       ScheduledExecutorService scheduler) {
+    this(id, List.of(circuitId), displayName, panelSerial, tree, switchable, control, scheduler);
+  }
+
+  /** An outlet for several circuits that feed one load; the first leg names it. */
+  public CircuitOutlet(
+      int id,
+      List<String> legs,
+      String displayName,
+      String panelSerial,
+      HomieTree tree,
+      boolean switchable,
+      RelayControl control,
+      ScheduledExecutorService scheduler) {
+    if (legs.isEmpty()) {
+      throw new IllegalArgumentException("an outlet needs at least one circuit");
+    }
     this.id = id;
-    this.circuitId = circuitId;
+    this.legs = List.copyOf(legs);
+    this.circuitId = this.legs.get(0);
     this.displayName = displayName;
     this.panelSerial = panelSerial;
     this.tree = tree;
@@ -94,6 +119,34 @@ public final class CircuitOutlet implements OutletAccessory, AccessoryWithName {
 
   public String circuitId() {
     return circuitId;
+  }
+
+  /** Every circuit this outlet switches; one, unless it is a combined circuit. */
+  public List<String> legs() {
+    return legs;
+  }
+
+  public boolean isCombined() {
+    return legs.size() > 1;
+  }
+
+  /** On while any leg's relay is closed. */
+  public boolean relayClosed() {
+    return legs.stream().anyMatch(leg -> SpanReadings.relay(tree, leg) == Relay.CLOSED);
+  }
+
+  /** Watts drawn across every leg. */
+  public double watts() {
+    return legs.stream().mapToDouble(leg -> SpanReadings.consumptionWatts(tree, leg)).sum();
+  }
+
+  private double kilowattHours() {
+    return legs.stream().mapToDouble(leg -> SpanReadings.consumedKilowattHours(tree, leg)).sum();
+  }
+
+  /** A 240 V load draws the same current through each leg, so the largest leg is the load's current. */
+  private double amps() {
+    return legs.stream().mapToDouble(leg -> SpanReadings.currentAmps(tree, leg)).max().orElse(0);
   }
 
   public String displayName() {
@@ -140,7 +193,7 @@ public final class CircuitOutlet implements OutletAccessory, AccessoryWithName {
     if (pending != null && Instant.now().isBefore(optimisticUntil)) {
       return CompletableFuture.completedFuture(pending);
     }
-    return CompletableFuture.completedFuture(SpanReadings.relay(tree, circuitId) == Relay.CLOSED);
+    return CompletableFuture.completedFuture(relayClosed());
   }
 
   @Override
@@ -157,10 +210,22 @@ public final class CircuitOutlet implements OutletAccessory, AccessoryWithName {
     log.info("turning \"{}\" {}", displayName, on ? "on" : "off");
     optimistic = on;
     optimisticUntil = Instant.now().plus(OPTIMISTIC_WINDOW);
+    List<String> done = new ArrayList<>();
     try {
-      control.setRelay(circuitId, on);
+      for (String leg : legs) {
+        control.setRelay(leg, on);
+        done.add(leg);
+      }
     } catch (Exception e) {
       log.warn("could not switch \"{}\": {}", displayName, e.getMessage());
+      // Put back the legs that did switch, so a 240 V load never runs on one leg.
+      for (String leg : done) {
+        try {
+          control.setRelay(leg, !on);
+        } catch (Exception again) {
+          log.warn("could not put back \"{}\" leg {}: {}", displayName, leg, again.getMessage());
+        }
+      }
       optimistic = null;
       snapBack();
       return CompletableFuture.completedFuture(null);
@@ -180,7 +245,7 @@ public final class CircuitOutlet implements OutletAccessory, AccessoryWithName {
   }
 
   private boolean inUse() {
-    return SpanReadings.consumptionWatts(tree, circuitId) >= SpanReadings.IN_USE_WATTS;
+    return watts() >= SpanReadings.IN_USE_WATTS;
   }
 
   @Override
@@ -224,12 +289,12 @@ public final class CircuitOutlet implements OutletAccessory, AccessoryWithName {
     outlet.addCharacteristic(
         EveCharacteristics.readOnly(
             EveCharacteristics.CONSUMPTION, "Consumption", 100_000, 0.1, "W",
-            () -> CompletableFuture.completedFuture(SpanReadings.consumptionWatts(tree, circuitId)),
+            () -> CompletableFuture.completedFuture(watts()),
             onWatts::set, () -> onWatts.set(null)));
     outlet.addCharacteristic(
         EveCharacteristics.readOnly(
             EveCharacteristics.TOTAL_CONSUMPTION, "Total Consumption", 1_000_000_000, 0.001, "kWh",
-            () -> CompletableFuture.completedFuture(SpanReadings.consumedKilowattHours(tree, circuitId)),
+            () -> CompletableFuture.completedFuture(kilowattHours()),
             onKwh::set, () -> onKwh.set(null)));
     outlet.addCharacteristic(
         EveCharacteristics.readOnly(
@@ -239,7 +304,7 @@ public final class CircuitOutlet implements OutletAccessory, AccessoryWithName {
     outlet.addCharacteristic(
         EveCharacteristics.readOnly(
             EveCharacteristics.CURRENT, "Electric Current", 1_000, 0.01, "A",
-            () -> CompletableFuture.completedFuture(SpanReadings.currentAmps(tree, circuitId)),
+            () -> CompletableFuture.completedFuture(amps()),
             onAmps::set, () -> onAmps.set(null)));
     return List.of(outlet);
   }
@@ -268,7 +333,8 @@ public final class CircuitOutlet implements OutletAccessory, AccessoryWithName {
 
   @Override
   public CompletableFuture<String> getModel() {
-    return CompletableFuture.completedFuture(switchable ? "SPAN circuit" : "SPAN circuit (read-only)");
+    String kind = isCombined() ? "SPAN combined circuit" : "SPAN circuit";
+    return CompletableFuture.completedFuture(switchable ? kind : kind + " (read-only)");
   }
 
   @Override
