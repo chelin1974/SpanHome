@@ -58,7 +58,10 @@ commissioned solar and battery circuits, for instance) are always read-only.
 - **SPAN firmware with SPAN API.** Built against `spanos3/r202633` (the parent/child data
   model). The SPAN API beta started on the MAIN 32. `--list` prints each panel's model and
   firmware.
-- **Java 21 or newer**, and Maven to build.
+- **Java 21 or newer** to run the bridge. Maven to build, or Docker (see below).
+- **Docker** (optional) for Prometheus, Grafana and the build. The bridge itself runs outside
+  Docker: on a Mac, Docker Desktop's VM doesn't pass the Bonjour traffic HomeKit and the
+  panels' `.local` names depend on.
 - **A machine that stays on**, on the same network as the panels and your Home hub (Apple TV
   or HomePod). HomeKit finds the bridge over Bonjour, so no guest Wi-Fi or VLAN between them.
 
@@ -68,6 +71,12 @@ commissioned solar and battery circuits, for instance) are always read-only.
 
 ```bash
 mvn package
+```
+
+Or without Maven installed, in Docker:
+
+```bash
+docker compose run --rm build
 ```
 
 **2. Configure.** Copy the example and set your panel serials (shown in the SPAN Home app):
@@ -213,23 +222,21 @@ The bridge doesn't keep history itself. It publishes its readings as OpenTelemet
 OTLP/HTTP, and Prometheus 3 stores them. The dashboard's 24-hour graphs read them back with
 PromQL, and you can use the same data in Grafana, alerts, or anything else that speaks PromQL.
 
-**1. Run Prometheus 3 with its OTLP receiver.** On the Mac, with Homebrew:
+**1. Run Prometheus 3 with its OTLP receiver.** From the repo folder, with Docker:
 
 ```bash
-brew install prometheus
-prometheus --config.file=prometheus.yml --web.enable-otlp-receiver \
-  --storage.tsdb.path=$HOME/.span-home-prometheus --storage.tsdb.retention.time=400d
+docker compose up -d                      # Prometheus on http://localhost:9090
+docker compose --profile grafana up -d    # also Grafana on http://localhost:3000 (admin / admin)
 ```
 
-`prometheus.yml` in this repo is a ready-made config: no scraping, OTLP settings, and an
-out-of-order window. Or with Docker:
+`docker-compose.yml` runs Prometheus 3.5 with the OTLP receiver on, 400 days of retention, and
+`prometheus.yml` from this repo (no scraping, OTLP settings, an out-of-order window). Data lives
+in a Docker volume, so it survives restarts and upgrades; containers come back on their own
+after a reboot once Docker Desktop starts. Prometheus listens on this machine only. Grafana, if
+you start it, already has Prometheus as its data source.
 
-```bash
-docker run -d --name prometheus -p 9090:9090 \
-  -v "$PWD/prometheus.yml:/etc/prometheus/prometheus.yml" -v span-home-prometheus:/prometheus \
-  prom/prometheus:v3.5.0 --config.file=/etc/prometheus/prometheus.yml \
-  --web.enable-otlp-receiver --storage.tsdb.retention.time=400d
-```
+`docker compose down` stops them and keeps the data; `docker compose down -v` deletes it.
+Without Docker, `brew install prometheus` and run it with the same flags as the compose file.
 
 **2. Point the bridge at it** in `span-home.config.json`, and restart the bridge:
 

@@ -1,0 +1,51 @@
+# Prometheus (and optionally Grafana) for SpanHome.
+#
+#   docker compose up -d                      # Prometheus only
+#   docker compose --profile grafana up -d    # Prometheus and Grafana
+#   docker compose run --rm build             # build target/span-home.jar, no local Maven needed
+#
+# The bridge itself runs outside Docker: HomeKit finds it over Bonjour, which does not cross
+# Docker Desktop's VM on macOS. It pushes to Prometheus at http://localhost:9090.
+name: span-home
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=400d
+      - --web.enable-otlp-receiver
+    ports:
+      # Only this machine: the bridge pushes here and the dashboard reads through the bridge.
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    profiles: ["grafana"]
+    depends_on: [prometheus]
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/datasource.yml:/etc/grafana/provisioning/datasources/prometheus.yml:ro
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+
+  # Builds the bridge jar with Maven and a JDK from the image; the Maven cache lives in a volume.
+  build:
+    image: maven:3.9-eclipse-temurin-21
+    profiles: ["build"]
+    working_dir: /src
+    command: mvn -q -B package
+    volumes:
+      - .:/src
+      - maven-cache:/root/.m2
+
+volumes:
+  maven-cache:
+  prometheus-data:
+  grafana-data:

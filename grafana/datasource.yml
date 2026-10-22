@@ -1,0 +1,8 @@
+# Grafana picks up Prometheus automatically when started with: docker compose --profile grafana up -d
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
