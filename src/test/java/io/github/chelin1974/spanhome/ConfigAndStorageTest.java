@@ -37,6 +37,18 @@ class ConfigAndStorageTest {
   }
 
   @Test
+  @DisplayName("a trailing * matches names starting with the rest, optionally on one panel")
+  void prefixMatch() throws Exception {
+    SpanHomeConfig config = config("{\"panels\":[{\"serial\":\"nj-2410-00h2v\"}],"
+        + "\"rooms\":{\"Bedroom\":[\"Master bed*\"],\"Shop\":[\"Second: Lights*\"]},\"readOnlyCircuits\":[\"AC*\"]}");
+    assertEquals("Bedroom", config.roomOf("Second", "Master bed/bathroom Charlie's side", "x"));
+    assertEquals("Shop", config.roomOf("Second", "Lights, Outlets / Master bedroom", "x"));
+    assertEquals(null, config.roomOf("Main", "Lights, Outlets", "x"));
+    assertFalse(config.isSwitchable("Second", "AC condenser 2", "x"));
+    assertTrue(config.isSwitchable("Second", "Pool", "x"));
+  }
+
+  @Test
   @DisplayName("every circuit is switchable when switchCircuits is not given")
   void switchableByDefault() throws Exception {
     SpanHomeConfig config = config("{\"panels\":[{\"serial\":\"nj-2410-00h2v\"}]}");

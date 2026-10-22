@@ -287,6 +287,14 @@ public final class SpanHomeConfig {
       if (p.equals(name) || compact.equals(qualified) || p.equals(id)) {
         return true;
       }
+      // A trailing "*" matches names that start with the rest, for long names: "Master bed*".
+      if (p.length() > 1 && p.endsWith("*")) {
+        String prefix = p.substring(0, p.length() - 1);
+        String compactPrefix = compact.substring(0, compact.length() - 1);
+        if (name.startsWith(prefix) || (compactPrefix.contains(":") && qualified.startsWith(compactPrefix))) {
+          return true;
+        }
+      }
     }
     return false;
   }

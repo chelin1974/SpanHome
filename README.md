@@ -287,6 +287,9 @@ min_over_time(span_grid_connected[7d]) == 0               # any outage this week
 | `readOnlyCircuits` | none | Circuits Home must never switch. Overrides `switchCircuits`. No `"*"`. |
 | `hiddenCircuits` | none | Circuits left out of Home. No `"*"` here. |
 | `rooms` | none | Room name to its circuits, for the dashboard's room sort, e.g. `{"Kitchen": ["Oven", "Dishwasher"]}`. Matched like the lists above. |
+
+In all of these lists a name ending in `*` matches every circuit whose name starts with the rest,
+which helps with long names: `"Master bed*"`, or `"Second: Lights*"` for one panel only.
 | `showBattery` | `true` | Publish the Grid/battery accessory when a battery is commissioned. |
 | `showWattsInHome` | `true` | A "<circuit> Power" tile for each circuit, so Home shows its draw. |
 | `showPanelPower` | `true` | Per-panel and whole-house power sensors. |
