@@ -1,0 +1,14 @@
+# Prometheus 3 for SpanHome: the bridge pushes OTLP metrics; nothing is scraped.
+# Run with:  prometheus --config.file=prometheus.yml --web.enable-otlp-receiver
+global:
+  scrape_interval: 1m
+
+otlp:
+  # Keep the bridge's service name as a label on every series.
+  promote_resource_attributes:
+    - service.name
+
+storage:
+  tsdb:
+    # Lets late pushes land, e.g. after the bridge's machine wakes from sleep.
+    out_of_order_time_window: 30m

@@ -10,6 +10,10 @@ import io.github.chelin1974.spanhome.homekit.HomeKitNames;
 import io.github.chelin1974.spanhome.homekit.LayoutVersion;
 import io.github.chelin1974.spanhome.homekit.NetworkAddresses;
 import io.github.chelin1974.spanhome.homekit.PowerSensor;
+import io.github.chelin1974.spanhome.metrics.OtlpExporter;
+import io.github.chelin1974.spanhome.web.DashboardModel;
+import io.github.chelin1974.spanhome.web.DashboardServer;
+import io.github.chelin1974.spanhome.web.PrometheusHistory;
 import io.github.chelin1974.spanhome.span.HomieTree;
 import io.github.chelin1974.spanhome.span.HomieTree.Device;
 import io.github.chelin1974.spanhome.span.PanelCredentials;
@@ -22,6 +26,8 @@ import io.github.hapjava.server.impl.HomekitServer;
 import java.net.InetAddress;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -56,6 +62,11 @@ public final class SpanHomeBridge implements AutoCloseable {
 
   private HomekitServer server;
   private HomekitRoot bridge;
+  private final List<DashboardModel.PanelSource> dashboardPanels = new ArrayList<>();
+  private OtlpExporter exporter;
+  private DashboardServer dashboard;
+
+  static final String VERSION = "1.0.0";
 
   public SpanHomeBridge(SpanHomeConfig config) {
     this.config = config;
@@ -157,6 +168,35 @@ public final class SpanHomeBridge implements AutoCloseable {
               + " Home app, stop it, delete {}, and start it again for a new code.",
           config.statePath().toAbsolutePath());
     }
+
+    startDashboardAndMetrics(address);
+  }
+
+  /** The Breaker Board page and the OTLP export. Neither can stop HomeKit from running. */
+  private void startDashboardAndMetrics(InetAddress address) {
+    DashboardModel model = new DashboardModel(dashboardPanels);
+
+    config.otlpUri().ifPresentOrElse(
+        uri -> {
+          exporter = new OtlpExporter(uri, model, Duration.ofSeconds(config.metricsIntervalSeconds), VERSION);
+          exporter.start();
+        },
+        () -> log.info("metrics export is off; set \"prometheusUrl\" to record history"));
+
+    if (config.dashboardPort <= 0) {
+      return;
+    }
+    PrometheusHistory history = config.prometheusUri().map(PrometheusHistory::new).orElse(null);
+    try {
+      dashboard = new DashboardServer(config.dashboardPort, model, history, config.dashboardPasscode);
+      dashboard.start();
+      log.info("Breaker Board dashboard at http://{}:{}/{}",
+          address.getHostAddress(), dashboard.port(),
+          dashboard.switchingEnabled() ? "" : " (view-only: set dashboardPasscode to allow switching)");
+    } catch (java.io.IOException e) {
+      log.warn("could not start the dashboard on port {}: {}. Set dashboardPort to a free port, or 0 to turn it off.",
+          config.dashboardPort, e.getMessage());
+    }
   }
 
   private List<HomekitAccessory> buildPanel(
@@ -228,6 +268,14 @@ public final class SpanHomeBridge implements AutoCloseable {
       }
     }
 
+    Set<String> hiddenIds = new HashSet<>();
+    for (Device circuit : SpanReadings.circuits(tree)) {
+      if (config.isHidden(label, SpanReadings.name(tree, circuit), circuit.id())) {
+        hiddenIds.add(circuit.id());
+      }
+    }
+    dashboardPanels.add(new DashboardModel.PanelSource(label, tree, outlets, hiddenIds, connection::isConnected));
+
     BackupBattery finalBattery = battery;
     tree.addListener((deviceId, node, property, value) -> {
       CircuitOutlet outlet = outlets.get(deviceId);
@@ -277,6 +325,12 @@ public final class SpanHomeBridge implements AutoCloseable {
 
   @Override
   public void close() {
+    if (dashboard != null) {
+      dashboard.close();
+    }
+    if (exporter != null) {
+      exporter.close();
+    }
     scheduler.shutdownNow();
     if (bridge != null) {
       bridge.stop();

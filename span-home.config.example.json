@@ -10,6 +10,10 @@
   "showBattery": true,
   "showWattsInHome": true,
   "showPanelPower": true,
+  "prometheusUrl": "http://localhost:9090",
+  "dashboardPort": 8089,
+  "dashboardPasscode": "",
+
   "bridgeName": "SPAN",
   "port": 51828
 }

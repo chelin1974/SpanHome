@@ -187,6 +187,84 @@ The agent runs only while you're logged in and the Mac is awake. A sleeping lapt
 closed included, takes the accessories to "No Response" until it wakes. For an always-on
 setup, use a Mac mini or a Linux box with the systemd unit above.
 
+## Breaker Board dashboard
+
+The bridge also serves a dashboard on your home network: both panels drawn as they are wired,
+live watts for every breaker, panel and house totals, the battery, a 24-hour graph behind each
+breaker, and switching.
+
+Open `http://<this-machine>.local:8089` (the exact address is in the startup log) from any phone
+or computer on your Wi-Fi. In Safari on iPhone, **Share → Add to Home Screen** makes it open like
+an app.
+
+- **Switching** needs the household passcode you set as `dashboardPasscode`. Each device asks
+  once and remembers it. Without a passcode the dashboard is view-only. Five wrong passcodes lock
+  that device out for five minutes. Switching goes through the same path as HomeKit, so
+  `readOnlyCircuits` and the panel's own locks apply, and the Home app updates too.
+- **Turning a circuit off takes two taps**, because it cuts the power at the breaker.
+- **Home network only.** The dashboard answers private, link-local and loopback addresses and
+  refuses everything else, even if a router forwards the port by mistake. It has no HTTPS: use
+  it on networks you trust.
+- `"dashboardPort": 0` turns it off.
+
+## History with Prometheus (OpenTelemetry)
+
+The bridge doesn't keep history itself. It publishes its readings as OpenTelemetry metrics over
+OTLP/HTTP, and Prometheus 3 stores them. The dashboard's 24-hour graphs read them back with
+PromQL, and you can use the same data in Grafana, alerts, or anything else that speaks PromQL.
+
+**1. Run Prometheus 3 with its OTLP receiver.** On the Mac, with Homebrew:
+
+```bash
+brew install prometheus
+prometheus --config.file=prometheus.yml --web.enable-otlp-receiver \
+  --storage.tsdb.path=$HOME/.span-home-prometheus --storage.tsdb.retention.time=400d
+```
+
+`prometheus.yml` in this repo is a ready-made config: no scraping, OTLP settings, and an
+out-of-order window. Or with Docker:
+
+```bash
+docker run -d --name prometheus -p 9090:9090 \
+  -v "$PWD/prometheus.yml:/etc/prometheus/prometheus.yml" -v span-home-prometheus:/prometheus \
+  prom/prometheus:v3.5.0 --config.file=/etc/prometheus/prometheus.yml \
+  --web.enable-otlp-receiver --storage.tsdb.retention.time=400d
+```
+
+**2. Point the bridge at it** in `span-home.config.json`, and restart the bridge:
+
+```json
+"prometheusUrl": "http://localhost:9090"
+```
+
+The bridge then pushes every 15 seconds to `<prometheusUrl>/api/v1/otlp/v1/metrics`. To send
+somewhere else, such as an OpenTelemetry Collector, set `otlpEndpoint` to its OTLP/HTTP metrics
+URL; the dashboard still reads history from `prometheusUrl`. If Prometheus is down, the bridge
+logs it once and keeps working, and the graphs show a gap for that time.
+
+**What Prometheus receives.** OTLP names are translated: dots become underscores and the unit
+becomes a suffix.
+
+| In Prometheus | What it is | Labels |
+| --- | --- | --- |
+| `span_circuit_power_watts` | Watts the circuit is drawing | `panel`, `circuit`, `circuit_id`, `circuit_spaces` |
+| `span_circuit_relay` | 1 = on, 0 = off | same |
+| `span_circuit_energy_joules_total` | Lifetime energy drawn, in joules (counter; ÷ 3,600,000 for kWh) | same |
+| `span_panel_power_watts` | Sum of the panel's circuits | `panel`, `panel_serial` |
+| `span_panel_voltage_volts` | Average of the two legs | `panel`, `panel_serial` |
+| `span_house_power_watts` | Sum of every panel | |
+| `span_battery_charge_percent` | Battery state of charge | `panel` |
+| `span_battery_power_watts` | Battery power, + while charging | `panel` |
+| `span_grid_connected` | 1 on grid, 0 during an outage | `panel` |
+
+Some queries to start with:
+
+```promql
+topk(5, avg_over_time(span_circuit_power_watts[1h]))      # biggest loads, last hour
+sum(increase(span_circuit_energy_joules_total[24h])) / 3.6e6     # kWh used in the last day
+min_over_time(span_grid_connected[7d]) == 0               # any outage this week
+```
+
 ## Configuration
 
 | Setting | Default | Notes |
@@ -203,6 +281,11 @@ setup, use a Mac mini or a Linux box with the systemd unit above.
 | `bridgeName` | `SPAN` | Shown while pairing. |
 | `port` | `51828` | HomeKit port. Different from DaikinHome's, so both can run on one machine. |
 | `bindAddress` | chosen automatically | LAN IP to advertise on. Set it if the Home app can't find the bridge. |
+| `dashboardPort` | `8089` | Breaker Board dashboard port. `0` turns it off. |
+| `dashboardPasscode` | none | Household passcode for switching from the dashboard. Without it the dashboard is view-only. |
+| `prometheusUrl` | none | Prometheus 3 base URL. Turns on metrics export and the dashboard's 24 h graphs. |
+| `otlpEndpoint` | `<prometheusUrl>/api/v1/otlp/v1/metrics` | Where OTLP metrics go, if not straight to Prometheus. |
+| `metricsIntervalSeconds` | `15` | Seconds between metric pushes. |
 | `storagePath`, `credentialsPath`, `accessoryIdsPath` | next to the config | See below. |
 
 ## Files to keep
@@ -266,6 +349,11 @@ mvn test
 | `span/SpanRegistration` | `--register`: CA download and `auth/register` |
 | `homekit/CircuitOutlet` | A circuit as an outlet, with Eve power characteristics |
 | `homekit/BackupBattery` | Grid contact sensor and battery service |
+| `metrics/OtlpMetrics` | Readings to an OTLP metrics request (pure) |
+| `metrics/OtlpExporter` | Pushes OTLP/HTTP JSON on a timer, on its own thread |
+| `web/DashboardServer` | The dashboard page, its API, passcode and home-network checks |
+| `web/PrometheusHistory` | 24 h of 15-minute averages back from Prometheus |
+| `src/main/resources/dashboard/index.html` | The Breaker Board page |
 | `SpanHomeBridge` | Startup, discovery, wiring panels to accessories |
 
 ## License

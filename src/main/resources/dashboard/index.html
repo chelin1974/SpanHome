@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Breaker Board">
+<meta name="theme-color" content="#eef1f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#11161c" media="(prefers-color-scheme: dark)">
+<title>Breaker Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: the panel drawn as it is wired. Odd spaces in the left column, even in the right,
+   two-pole breakers spanning two rows. Totals and battery sit above the panel; a load-ranked
+   list is the second view. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --well: #e3e8ee;
+  --ink: #18202a;
+  --muted: #5d6b7a;
+  --rule: #cfd7e0;
+  --load: #c97a10;
+  --load-soft: #f5e4c8;
+  --on: #1f8a5b;
+  --off: #9aa6b2;
+  --warn: #b4421f;
+  --warn-soft: #f7ddd4;
+  --focus: #2f6fd1;
+
+  --display: "Barlow Semi Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --body: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --surface: #1a2129; --well: #222b35; --ink: #e6ebf0; --muted: #94a2b1;
+    --rule: #2e3945; --load: #e6a23c; --load-soft: #3a2e1b; --on: #3fbf86; --off: #5b6875;
+    --warn: #f07a55; --warn-soft: #3d2219; --focus: #6aa0ff; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --surface: #1a2129; --well: #222b35; --ink: #e6ebf0; --muted: #94a2b1;
+  --rule: #2e3945; --load: #e6a23c; --load-soft: #3a2e1b; --on: #3fbf86; --off: #5b6875;
+  --warn: #f07a55; --warn-soft: #3d2219; --focus: #6aa0ff; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px;
+  line-height: 1.45; -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 980px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+  display: grid; gap: 20px;
+}
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.label {
+  font-family: var(--display); font-weight: 600; font-size: 12px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted);
+}
+
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 8px 16px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: 30px; line-height: 1.05; margin: 0; text-wrap: balance; }
+.sample {
+  font-size: 13px; color: var(--muted); background: var(--well); border-radius: 6px;
+  padding: 4px 10px; display: inline-flex; gap: 6px; align-items: center;
+}
+.sample b { color: var(--ink); font-weight: 600; }
+
+/* Summary strip */
+.summary { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1.3fr; gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; display: grid; gap: 4px; min-width: 0; }
+.tile .big { font-family: var(--mono); font-weight: 600; font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile .big small { font-size: 15px; color: var(--muted); font-weight: 500; margin-left: 3px; }
+.tile .sub { font-size: 13px; color: var(--muted); }
+.tile.house .big { font-size: 38px; }
+.split { height: 8px; border-radius: 4px; background: var(--well); overflow: hidden; display: flex; margin-top: 6px; }
+.split span { display: block; height: 100%; }
+.split .a { background: var(--load); }
+.split .b { background: color-mix(in srgb, var(--load) 45%, var(--well)); }
+.battery { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center; }
+.cell { width: 34px; height: 54px; border: 2px solid var(--ink); border-radius: 5px; position: relative; grid-row: span 3; }
+.cell::before { content: ""; position: absolute; top: -6px; left: 10px; width: 10px; height: 4px; background: var(--ink); border-radius: 2px 2px 0 0; }
+.cell i { position: absolute; left: 3px; right: 3px; bottom: 3px; background: var(--on); border-radius: 2px; }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 99px; background: var(--well); color: var(--ink); width: fit-content; }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.ok { color: var(--on); }
+.pill.charging { color: var(--load); }
+
+/* Controls */
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.seg { display: inline-flex; background: var(--well); border-radius: 8px; padding: 3px; gap: 2px; }
+.seg button {
+  font-family: var(--display); font-weight: 600; font-size: 14px; letter-spacing: .02em;
+  border: 0; background: transparent; color: var(--muted); padding: 6px 14px; border-radius: 6px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+button:focus-visible, .breaker:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* The panel */
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 14px; }
+.panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.panel-head h2 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 0; }
+.panel-head .meta { font-size: 13px; color: var(--muted); }
+.board { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: minmax(58px, auto); column-gap: 26px; row-gap: 6px; position: relative; }
+.board::before { /* the bus bar down the middle */
+  content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 6px; transform: translateX(-50%);
+  background: repeating-linear-gradient(var(--well) 0 10px, var(--rule) 10px 12px); border-radius: 3px;
+}
+.space { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.breaker {
+  position: relative; min-width: 0; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-content: center;
+  background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; cursor: pointer;
+  text-align: left; color: inherit; font: inherit;
+}
+.breaker.empty { background: transparent; border-style: dashed; cursor: default; }
+.breaker.empty .name { color: var(--muted); font-weight: 400; }
+.breaker.hidden-c { opacity: .55; cursor: default; }
+.breaker .name { font-family: var(--display); font-weight: 600; font-size: 15px; line-height: 1.15; overflow-wrap: anywhere; }
+.breaker .row2 { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
+.breaker .w { font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; min-width: 4.5ch; text-align: right; }
+.breaker .meter { flex: 1; height: 5px; border-radius: 3px; background: var(--well); overflow: hidden; }
+.breaker .meter i { display: block; height: 100%; background: var(--load); border-radius: 3px; transition: width .4s; }
+.toggle { width: 38px; height: 22px; border-radius: 11px; background: var(--off); position: relative; transition: background .2s; flex: none; align-self: start; }
+.toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.breaker.on .toggle { background: var(--on); }
+.breaker.on .toggle::after { transform: translateX(16px); }
+.breaker.locked .toggle { opacity: .45; }
+.lock { font-size: 11px; color: var(--muted); }
+.breaker.armed { border-color: var(--warn); background: var(--warn-soft); }
+.breaker.off .name { color: var(--muted); }
+/* 24 h history drawn behind each breaker: left edge is 24 h ago, right edge is now. */
+.breaker > :not(.spark) { position: relative; z-index: 1; }
+.spark { position: absolute; inset: 0; z-index: 0; pointer-events: none; border-radius: 7px; overflow: hidden; }
+.spark svg { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 72%; display: block; }
+.sp-area { fill: color-mix(in srgb, var(--load) 17%, transparent); }
+.sp-line { fill: none; stroke: color-mix(in srgb, var(--load) 65%, transparent); stroke-width: 1.25; }
+.spark .dot { position: absolute; right: 1px; width: 6px; height: 6px; margin-bottom: -3px; border-radius: 50%; background: var(--load); }
+.breaker.off .spark .dot { background: var(--off); }
+.breaker .pk { flex: 1; font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arm-note { grid-column: 1 / -1; font-size: 12px; color: var(--warn); font-weight: 600; }
+.tag { font-family: var(--display); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule); border-radius: 4px; padding: 0 4px; }
+
+/* Load list */
+.loads { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 6px 14px; }
+.loads ol { list-style: none; margin: 0; padding: 0; }
+.loads li { display: grid; grid-template-columns: minmax(0, 1fr) 110px auto 38px; gap: 4px 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.loads .ls { width: 110px; height: 30px; }
+.loads .ls svg { width: 100%; height: 100%; display: block; }
+.loads li:last-child { border-bottom: 0; }
+.loads .who { min-width: 0; }
+.loads .who b { font-family: var(--display); font-weight: 600; font-size: 16px; display: block; overflow-wrap: anywhere; }
+.loads .who span { font-size: 12px; color: var(--muted); }
+.loads .w { font-family: var(--mono); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.loads .lm { grid-column: 1 / -1; height: 4px; background: var(--well); border-radius: 2px; overflow: hidden; }
+.loads .lm i { display: block; height: 100%; background: var(--load); }
+.loads .toggle { cursor: pointer; border: 0; padding: 0; }
+.loads li.on .toggle { background: var(--on); }
+.loads li.on .toggle::after { transform: translateX(16px); }
+.loads li.armed { background: var(--warn-soft); }
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px;
+  max-width: calc(100% - 32px); box-shadow: 0 6px 24px rgb(0 0 0 / .25);
+}
+footer { font-size: 13px; color: var(--muted); }
+footer code { font-family: var(--mono); font-size: 12px; }
+
+@media (max-width: 720px) {
+  .summary { grid-template-columns: 1fr 1fr; }
+  .tile.house { grid-column: 1 / -1; }
+  .tile.batt { grid-column: 1 / -1; }
+}
+@media (max-width: 460px) {
+  .board { column-gap: 14px; }
+  .breaker { padding: 7px 8px; }
+  .breaker .name { font-size: 14px; }
+  .breaker .pk { display: none; }
+  .loads li { grid-template-columns: minmax(0, 1fr) auto 38px; }
+  .loads .ls { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+<style>
+/* Additions for the live page: status, passcode sheet, history gaps. */
+/* Overlays and views are toggled with the hidden attribute; make it win over display rules. */
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+img { max-width: 100%; }
+body { margin: 0; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); background: var(--well); border-radius: 6px; padding: 4px 10px; }
+.status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
+.status.live::before { background: var(--on); }
+.status.down::before { background: var(--warn); }
+.status b { color: var(--ink); font-weight: 600; }
+.note { font-size: 13px; color: var(--muted); }
+.note.warn { color: var(--warn); }
+.summary { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.tile.house { grid-column: span 2; }
+@media (max-width: 720px) { .tile.house { grid-column: 1 / -1; } }
+.breaker.offline { opacity: .6; }
+.sheet-back { position: fixed; inset: 0; background: rgb(0 0 0 / .4); display: grid; place-items: center; z-index: 20;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.sheet { background: var(--surface); color: var(--ink); border-radius: 12px; padding: 20px; width: min(360px, 100%); display: grid; gap: 12px; box-shadow: 0 10px 40px rgb(0 0 0 / .3); }
+.sheet h3 { margin: 0; font-family: var(--display); font-size: 20px; }
+.sheet p { margin: 0; font-size: 14px; color: var(--muted); }
+.sheet input { font: inherit; font-size: 18px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--rule); background: var(--bg); color: var(--ink); letter-spacing: .1em; }
+.sheet .err { color: var(--warn); font-size: 13px; min-height: 1em; }
+.sheet .actions { display: flex; gap: 8px; justify-content: flex-end; }
+.sheet button { font-family: var(--display); font-weight: 600; font-size: 15px; border-radius: 8px; padding: 8px 16px; border: 1px solid var(--rule); background: var(--bg); color: var(--ink); cursor: pointer; }
+.sheet button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="label" id="subtitle">SPAN panels</div>
+      <h1>Breaker Board</h1>
+    </div>
+    <span class="status" id="status">Connecting…</span>
+  </header>
+
+  <section class="summary" id="summary" aria-label="Totals"></section>
+
+  <div class="bar">
+    <div class="seg" role="group" aria-label="View">
+      <button type="button" id="vPanel" aria-pressed="true">Panel</button>
+      <button type="button" id="vLoads" aria-pressed="false">Biggest loads</button>
+    </div>
+    <div class="seg" role="group" aria-label="Panel" id="panelPick"></div>
+  </div>
+
+  <section id="panelView" class="panel">
+    <div class="panel-head">
+      <h2 id="panelTitle">Panel</h2>
+      <span class="meta" id="panelMeta"></span>
+    </div>
+    <div class="board" id="board"></div>
+  </section>
+
+  <section id="loadsView" class="loads" hidden>
+    <ol id="loadList"></ol>
+  </section>
+
+  <p class="note" id="historyNote"></p>
+
+  <footer>
+    Odd spaces on the left, even on the right, as in the panel; two-pole breakers span two rows.
+    The graph behind each breaker is its draw over the last 24 hours, in 15-minute averages from
+    Prometheus, scaled to that breaker's own peak; the dot is the current reading. Turning a
+    circuit off takes two taps, because it cuts power at the breaker. <span class="tag">Locked</span>
+    circuits are ones the panel won't switch; dimmed ones are hidden from Home.
+  </footer>
+</div>
+
+<div class="sheet-back" id="sheetBack" hidden>
+  <form class="sheet" id="sheet" autocomplete="off">
+    <h3>Household passcode</h3>
+    <p id="sheetWhat">Enter the passcode to switch circuits from this device. It's remembered here.</p>
+    <input id="passcodeInput" type="password" inputmode="text" autocomplete="current-password" aria-label="Passcode" required>
+    <span class="err" id="sheetErr" role="alert"></span>
+    <div class="actions">
+      <button type="button" id="sheetCancel">Cancel</button>
+      <button type="submit" class="primary">Switch</button>
+    </div>
+  </form>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const fmt = w => Math.round(w).toLocaleString("en-US");
+const fmtK = w => (w >= 1000 ? (w / 1000).toFixed(1) + " kW" : Math.round(w) + " W");
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
+
+let state = null, history = null, lastOk = 0, view = "panel", panelIdx = 0;
+let armed = null, armTimer = null, toastTimer = null, sheetDone = null;
+const pending = {};   // circuit id -> { on, until }: shown until the panel's report catches up
+
+function readPasscode() { try { return localStorage.getItem("span-home-passcode") || ""; } catch { return ""; } }
+function savePasscode(v) { try { v ? localStorage.setItem("span-home-passcode", v) : localStorage.removeItem("span-home-passcode"); } catch {} }
+try { view = localStorage.getItem("span-home-view") || "panel"; panelIdx = +(localStorage.getItem("span-home-panel") || 0); } catch {}
+
+function toast(text) {
+  const t = $("toast");
+  t.textContent = text; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 3500);
+}
+
+// ---------------------------------------------------------------- data
+
+async function pollState() {
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    state = await r.json();
+    lastOk = Date.now();
+  } catch { /* shown as offline below */ }
+  render();
+}
+async function pollHistory() {
+  try { history = await (await fetch("/api/history", { cache: "no-store" })).json(); } catch { history = null; }
+  render();
+}
+
+const circuitsOf = p => p.circuits.map(c => {
+  const hold = pending[c.id];
+  if (hold && Date.now() < hold.until && hold.on !== c.on) return { ...c, on: hold.on, watts: hold.on ? c.watts : 0 };
+  if (hold) delete pending[c.id];
+  return c;
+});
+const draw = c => (c.on ? c.watts : 0);
+const counted = c => !c.hidden;
+
+// --------------------------------------------------------------- switching
+
+function press(c, panel) {
+  if (c.hidden) return;
+  if (!state.switching) { toast("Switching from this page is off. Set dashboardPasscode in the bridge's config."); return; }
+  if (c.locked) { toast(`${c.name} can't be switched: the panel doesn't allow it.`); return; }
+  if (!c.switchable) { toast(`${c.name} is read-only in the bridge's config.`); return; }
+  if (!panel.connected) { toast(`The ${panel.label} panel is offline right now.`); return; }
+  if (c.on && armed !== c.id) {          // first tap on a powered circuit only arms it
+    armed = c.id; clearTimeout(armTimer);
+    armTimer = setTimeout(() => { armed = null; render(); }, 4000);
+    render(); return;
+  }
+  clearTimeout(armTimer); armed = null;
+  send(c, !c.on);
+}
+
+async function send(c, on, passcode = readPasscode()) {
+  if (!passcode) { askPasscode(c, on, ""); return; }
+  let r;
+  try {
+    r = await fetch(`/api/circuits/${encodeURIComponent(c.id)}/relay`, {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Passcode": passcode },
+      body: JSON.stringify({ on }),
+    });
+  } catch { toast("Couldn't reach the bridge. Check you're on the home network."); return; }
+  if (r.status === 401) { savePasscode(""); askPasscode(c, on, "That passcode didn't work."); return; }
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) { toast(body.error || `The bridge refused (HTTP ${r.status}).`); render(); return; }
+  savePasscode(passcode);
+  pending[c.id] = { on, until: Date.now() + 15000 };
+  toast(on ? `${c.name} is back on.` : `${c.name} is off. Its breaker no longer supplies power.`);
+  render();
+  setTimeout(pollState, 1200);
+}
+
+function askPasscode(c, on, error) {
+  $("sheetWhat").textContent = `Enter the household passcode to turn ${c.name} ${on ? "on" : "off"}. This device remembers it.`;
+  $("sheetErr").textContent = error;
+  $("passcodeInput").value = "";
+  $("sheetBack").hidden = false;
+  setTimeout(() => $("passcodeInput").focus(), 30);
+  sheetDone = code => send(c, on, code);
+}
+$("sheet").addEventListener("submit", e => {
+  e.preventDefault();
+  const code = $("passcodeInput").value;
+  if (!code) return;
+  $("sheetBack").hidden = true;
+  const done = sheetDone; sheetDone = null;
+  if (done) done(code);
+});
+$("sheetCancel").onclick = () => { $("sheetBack").hidden = true; sheetDone = null; };
+
+// ----------------------------------------------------------------- graphs
+
+function seriesFor(key, current) {
+  const s = history && history.available && history.series ? history.series[key] : null;
+  if (!s) return null;
+  const pts = s.slice();
+  pts[pts.length - 1] = current;     // end on the live reading
+  return pts;
+}
+function sparkSvg(points) {
+  const vals = points.filter(v => v != null);
+  const max = Math.max(...vals, 1), n = points.length - 1;
+  let line = "", area = "", run = [];
+  const flush = () => {
+    if (run.length > 1) {
+      const d = "M" + run.map(([x, y]) => `${x},${y}`).join(" L");
+      line += d + " ";
+      area += `${d} L${run[run.length - 1][0]},40 L${run[0][0]},40 Z `;
+    }
+    run = [];
+  };
+  points.forEach((v, i) => {
+    if (v == null) { flush(); return; }  // a gap: the bridge or Prometheus was down
+    run.push([((i / n) * 100).toFixed(2), (40 - (v / max) * 38).toFixed(2)]);
+  });
+  flush();
+  return { max, html: `<svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path class="sp-area" d="${area}"/><path class="sp-line" d="${line}" vector-effect="non-scaling-stroke"/></svg>` };
+}
+
+// ----------------------------------------------------------------- render
+
+function slotFor(space) { return { col: space % 2 ? 1 : 2, row: Math.ceil(space / 2) }; }
+
+function renderStatus() {
+  const s = $("status"), age = Math.round((Date.now() - lastOk) / 1000);
+  if (!state || age > 10) { s.className = "status down"; s.innerHTML = "<b>Can't reach the bridge</b>"; return; }
+  const offline = state.panels.filter(p => !p.connected).map(p => p.label);
+  if (offline.length) { s.className = "status down"; s.innerHTML = `<b>${esc(offline.join(", "))} offline</b> · readings may be stale`; return; }
+  s.className = "status live"; s.innerHTML = `<b>Live</b> · ${state.switching ? "switching on" : "view only"}`;
+}
+
+function renderSummary() {
+  const tiles = [];
+  const panels = state.panels.map(p => ({ ...p, circuits: circuitsOf(p) }));
+  const totals = panels.map(p => p.circuits.filter(counted).reduce((a, c) => a + draw(c), 0));
+  const house = totals.reduce((a, b) => a + b, 0);
+  const split = panels.map((p, i) => `<span class="${i % 2 ? "b" : "a"}" style="width:${house ? (totals[i] / house) * 100 : 0}%"></span>`).join("");
+  tiles.push(`<div class="tile house"><span class="label">House draw</span><span class="big num">${fmt(house)}<small>W</small></span>
+    <div class="split" aria-hidden="true">${split}</div>
+    <span class="sub">${panels.map((p, i) => `${esc(p.label)} ${house ? Math.round((totals[i] / house) * 100) : 0}%`).join(" · ")}</span></div>`);
+  panels.forEach((p, i) => {
+    const off = p.circuits.filter(c => counted(c) && !c.on).length;
+    tiles.push(`<div class="tile"><span class="label">${esc(p.label)} panel</span><span class="big num">${fmt(totals[i])}<small>W</small></span>
+      <span class="sub">${p.connected ? (off ? `${off} circuit${off > 1 ? "s" : ""} switched off` : "All circuits on") : "Offline"}</span></div>`);
+  });
+  for (const p of panels) {
+    const b = p.battery;
+    if (!b || b.percent == null) continue;
+    const flow = { charging: "Charging", discharging: "Discharging", idle: "Idle", unknown: "—" }[b.flow] || b.flow;
+    const grid = b.grid === "off_grid" ? '<span class="pill" style="color:var(--warn)">Off grid</span>' : '<span class="pill ok">On grid</span>';
+    const backup = b.backupMinutes != null ? ` · about ${Math.round(b.backupMinutes / 60)} h backup` : "";
+    tiles.push(`<div class="tile batt"><span class="label">Backup battery · ${esc(p.label)}</span>
+      <div class="battery"><div class="cell" aria-hidden="true"><i style="height: calc((100% - 6px) * ${b.percent / 100})"></i></div>
+      <span class="big num">${b.percent}<small>%</small></span><span class="pill ${b.flow === "charging" ? "charging" : ""}">${flow}</span>
+      <span class="sub">${grid}${backup}</span></div></div>`);
+  }
+  $("summary").innerHTML = tiles.join("");
+}
+
+function renderPicker() {
+  const pick = $("panelPick");
+  pick.hidden = view !== "panel" || state.panels.length < 2;
+  pick.innerHTML = state.panels.map((p, i) => `<button type="button" data-i="${i}" aria-pressed="${i === panelIdx}">${esc(p.label)}</button>`).join("");
+  pick.querySelectorAll("button").forEach(b => (b.onclick = () => { panelIdx = +b.dataset.i; try { localStorage.setItem("span-home-panel", panelIdx); } catch {} render(); }));
+}
+
+function renderBoard() {
+  if (panelIdx >= state.panels.length) panelIdx = 0;
+  const p = state.panels[panelIdx], circuits = circuitsOf(p), board = $("board");
+  board.innerHTML = "";
+  const used = new Set();
+  let maxSpace = 0;
+  for (const c of circuits) {
+    if (!c.spaces.length) continue;
+    c.spaces.forEach(s => { used.add(s); maxSpace = Math.max(maxSpace, s); });
+    const first = slotFor(c.spaces[0]);
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "breaker" + (c.on ? " on" : " off") + (c.locked || (!c.switchable && !c.hidden) ? " locked" : "") +
+      (c.hidden ? " hidden-c" : "") + (armed === c.id ? " armed" : "") + (p.connected ? "" : " offline");
+    el.style.gridColumn = first.col;
+    el.style.gridRow = `${first.row} / span ${c.spaces.length}`;
+    el.setAttribute("aria-pressed", String(c.on));
+    el.setAttribute("aria-label", `${c.name}, space ${c.spaces.join(" and ")}, ${fmt(draw(c))} watts, ${c.on ? "on" : "off"}`);
+    if (c.hidden) el.disabled = true;
+    const pts = seriesFor(c.id, draw(c));
+    let graph = "", peakText = "no history yet";
+    if (pts) {
+      const spark = sparkSvg(pts), peak = Math.max(...pts.filter(v => v != null));
+      graph = `<span class="spark">${spark.html}<span class="dot" style="bottom:${((draw(c) / spark.max) * 0.95 * 72).toFixed(1)}%"></span></span>`;
+      peakText = peak > 0 ? "24 h peak " + fmtK(peak) : "idle 24 h";
+      el.title = peak > 0 ? `Last 24 h: peak ${fmtK(peak)}` : "No draw in the last 24 h";
+    }
+    const tag = c.locked ? "Locked" : c.hidden ? "Hidden" : !c.switchable ? "Read-only" : "";
+    el.innerHTML = `${graph}
+      <span class="name">${esc(c.name)}</span>
+      <span class="toggle" aria-hidden="true"></span>
+      <span class="row2"><span class="space">${c.spaces.join("·")}</span><span class="pk">${peakText}</span><span class="w">${fmt(draw(c))} W</span></span>
+      ${tag ? `<span class="row2"><span class="tag">${tag}</span></span>` : ""}
+      ${armed === c.id ? '<span class="arm-note">Tap again to cut power</span>' : ""}`;
+    el.addEventListener("click", () => press(c, p));
+    board.appendChild(el);
+  }
+  const last = maxSpace <= 16 ? 16 : maxSpace <= 24 ? 24 : maxSpace <= 32 ? 32 : maxSpace + (maxSpace % 2);
+  for (let s = 1; s <= last; s++) {
+    if (used.has(s)) continue;
+    const pos = slotFor(s), el = document.createElement("div");
+    el.className = "breaker empty";
+    el.style.gridColumn = pos.col; el.style.gridRow = pos.row;
+    el.innerHTML = `<span class="name">Open space</span><span class="row2"><span class="space">${s}</span></span>`;
+    board.appendChild(el);
+  }
+  const shown = circuits.filter(counted);
+  $("panelTitle").textContent = p.label + " panel";
+  $("panelMeta").textContent = [p.serial, p.model && p.model.replace("_", " "), p.firmware, `${shown.length} circuits`,
+    `${fmt(shown.reduce((a, c) => a + draw(c), 0))} W`, p.volts ? `${Math.round(p.volts)} V` : null].filter(Boolean).join(" · ");
+}
+
+function renderLoads() {
+  const list = $("loadList");
+  const rows = state.panels.flatMap(p => circuitsOf(p).filter(counted).map(c => ({ c, p })))
+    .sort((a, b) => draw(b.c) - draw(a.c) || a.c.name.localeCompare(b.c.name)).slice(0, 15);
+  const max = Math.max(...rows.map(r => draw(r.c)), 1);
+  list.innerHTML = "";
+  for (const { c, p } of rows) {
+    const li = document.createElement("li");
+    li.className = (c.on ? "on" : "") + (armed === c.id ? " armed" : "");
+    const pts = seriesFor(c.id, draw(c));
+    li.innerHTML = `
+      <span class="who"><b>${esc(c.name)}</b><span>${esc(p.label)} · space ${c.spaces.join(" & ")}${c.locked ? " · locked" : !c.switchable ? " · read-only" : ""}${armed === c.id ? " · tap again to cut power" : ""}</span></span>
+      <span class="ls" title="Last 24 h">${pts ? sparkSvg(pts).html : ""}</span>
+      <span class="w">${fmt(draw(c))} W</span>
+      <button type="button" class="toggle" aria-pressed="${c.on}" aria-label="Turn ${esc(c.name)} ${c.on ? "off" : "on"}"></button>
+      <span class="lm"><i style="width:${(draw(c) / max) * 100}%"></i></span>`;
+    li.querySelector("button").addEventListener("click", () => press(c, p));
+    list.appendChild(li);
+  }
+}
+
+function renderHistoryNote() {
+  const n = $("historyNote");
+  if (!history) { n.className = "note"; n.textContent = ""; return; }
+  if (!history.available) { n.className = "note warn"; n.textContent = "24 h graphs: " + history.reason; return; }
+  const any = Object.values(history.series || {}).some(s => s.some(v => v != null));
+  n.className = "note";
+  n.textContent = any ? "24 h graphs from Prometheus, refreshed every minute." : "Prometheus is connected but has no readings yet. Graphs fill in as the bridge records them.";
+}
+
+function render() {
+  renderStatus();
+  if (!state) return;
+  $("subtitle").textContent = "SPAN panels · " + state.panels.map(p => p.label).join(" and ");
+  renderSummary();
+  renderPicker();
+  $("vPanel").setAttribute("aria-pressed", String(view === "panel"));
+  $("vLoads").setAttribute("aria-pressed", String(view === "loads"));
+  $("panelView").hidden = view !== "panel";
+  $("loadsView").hidden = view !== "loads";
+  if (view === "panel") renderBoard(); else renderLoads();
+  renderHistoryNote();
+}
+
+function setView(v) { view = v; try { localStorage.setItem("span-home-view", v); } catch {} render(); }
+$("vPanel").onclick = () => setView("panel");
+$("vLoads").onclick = () => setView("loads");
+
+pollState();
+pollHistory();
+setInterval(() => { if ($("sheetBack").hidden && armed === null) pollState(); else renderStatus(); }, 2000);
+setInterval(pollHistory, 60000);
+</script>
+</body>
+</html>

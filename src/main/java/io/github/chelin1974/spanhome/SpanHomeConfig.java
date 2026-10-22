@@ -86,6 +86,30 @@ public final class SpanHomeConfig {
   /** Publish each panel's total draw, and the whole house's, as power sensors. */
   public Boolean showPanelPower = true;
 
+  /** Port for the Breaker Board dashboard on the home network; 0 turns it off. */
+  public Integer dashboardPort = 8089;
+
+  /**
+   * Household passcode for switching circuits from the dashboard. Without one the dashboard is
+   * view-only. Anyone who can reach the page and knows this can cut power to a circuit.
+   */
+  public String dashboardPasscode;
+
+  /**
+   * Prometheus 3 base URL, e.g. {@code http://localhost:9090}. Turns on metrics export (to its
+   * OTLP receiver) and the dashboard's 24 h graphs (read back with PromQL).
+   */
+  public String prometheusUrl;
+
+  /**
+   * OTLP/HTTP metrics endpoint. Defaults to Prometheus' receiver,
+   * {@code <prometheusUrl>/api/v1/otlp/v1/metrics}; set it to send elsewhere, such as a collector.
+   */
+  public String otlpEndpoint;
+
+  /** Seconds between metric pushes. */
+  public Integer metricsIntervalSeconds = 15;
+
   public String bridgeName = "SPAN";
   public Integer port = DEFAULT_PORT;
   public String bindAddress;
@@ -147,8 +171,41 @@ public final class SpanHomeConfig {
     if (showPanelPower == null) {
       showPanelPower = true;
     }
+    if (dashboardPort == null) {
+      dashboardPort = 8089;
+    }
+    if (metricsIntervalSeconds == null || metricsIntervalSeconds < 5) {
+      metricsIntervalSeconds = 15;
+    }
+    prometheusUri();
+    otlpUri();
     if (hiddenCircuits == null) {
       hiddenCircuits = new ArrayList<>();
+    }
+  }
+
+  /** The Prometheus base URL, when configured. */
+  public java.util.Optional<java.net.URI> prometheusUri() {
+    return isBlank(prometheusUrl) ? java.util.Optional.empty() : java.util.Optional.of(uri("prometheusUrl", prometheusUrl));
+  }
+
+  /** Where metrics go: {@code otlpEndpoint}, else Prometheus' OTLP receiver, else nowhere. */
+  public java.util.Optional<java.net.URI> otlpUri() {
+    if (!isBlank(otlpEndpoint)) {
+      return java.util.Optional.of(uri("otlpEndpoint", otlpEndpoint));
+    }
+    return prometheusUri().map(base -> java.net.URI.create(base.toString().replaceAll("/+$", "") + "/api/v1/otlp/v1/metrics"));
+  }
+
+  private static java.net.URI uri(String setting, String value) {
+    try {
+      java.net.URI parsed = new java.net.URI(value.trim());
+      if (parsed.getScheme() == null || !parsed.getScheme().matches("https?") || parsed.getHost() == null) {
+        throw new java.net.URISyntaxException(value, "needs http:// or https:// and a host");
+      }
+      return parsed;
+    } catch (java.net.URISyntaxException e) {
+      throw new ConfigException("\"" + setting + "\" is not a usable URL: " + value + " (" + e.getReason() + ")");
     }
   }
 
