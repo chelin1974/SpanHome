@@ -174,7 +174,7 @@ public final class SpanHomeBridge implements AutoCloseable {
 
   /** The Breaker Board page and the OTLP export. Neither can stop HomeKit from running. */
   private void startDashboardAndMetrics(InetAddress address) {
-    DashboardModel model = new DashboardModel(dashboardPanels);
+    DashboardModel model = new DashboardModel(dashboardPanels, config::roomOf);
 
     config.otlpUri().ifPresentOrElse(
         uri -> {

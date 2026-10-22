@@ -6,6 +6,10 @@
 
   "readOnlyCircuits": [],
   "hiddenCircuits": [],
+  "rooms": {
+    "Kitchen": ["Oven", "Dishwasher", "Main: Kitchen Outlets"],
+    "Garage": ["EV Charger"]
+  },
 
   "showBattery": true,
   "showWattsInHome": true,

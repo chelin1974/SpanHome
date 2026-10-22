@@ -198,9 +198,13 @@ setup, use a Mac mini or a Linux box with the systemd unit above.
 
 ## Breaker Board dashboard
 
-The bridge also serves a dashboard on your home network: both panels drawn as they are wired,
-live watts for every breaker, panel and house totals, the battery, a 24-hour graph behind each
-breaker, and switching.
+The bridge also serves a dashboard on your home network: live watts for every breaker, panel
+and house totals, the battery, a 24-hour graph behind each breaker, and switching.
+
+- **All circuits** shows every circuit from both panels in one list, sorted by **usage**
+  (biggest draw first), **name**, or **room**. Rooms come from `rooms` in the config: the Home
+  app doesn't share its rooms with accessories, so the bridge can't read them from there.
+- **As wired** draws each panel the way it is wired.
 
 Open `http://<this-machine>.local:8089` (the exact address is in the startup log) from any phone
 or computer on your Wi-Fi. In Safari on iPhone, **Share → Add to Home Screen** makes it open like
@@ -282,6 +286,7 @@ min_over_time(span_grid_connected[7d]) == 0               # any outage this week
 | `switchCircuits` | `["*"]` (all) | Circuits Home may switch. See above. |
 | `readOnlyCircuits` | none | Circuits Home must never switch. Overrides `switchCircuits`. No `"*"`. |
 | `hiddenCircuits` | none | Circuits left out of Home. No `"*"` here. |
+| `rooms` | none | Room name to its circuits, for the dashboard's room sort, e.g. `{"Kitchen": ["Oven", "Dishwasher"]}`. Matched like the lists above. |
 | `showBattery` | `true` | Publish the Grid/battery accessory when a battery is commissioned. |
 | `showWattsInHome` | `true` | A "<circuit> Power" tile for each circuit, so Home shows its draw. |
 | `showPanelPower` | `true` | Per-panel and whole-house power sensors. |

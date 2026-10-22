@@ -39,10 +39,22 @@ public final class DashboardModel {
     FAILED
   }
 
+  /** Which room a circuit is in, from the config; null for none. */
+  @FunctionalInterface
+  public interface Rooms {
+    String roomOf(String panelLabel, String circuitName, String circuitId);
+  }
+
   private final List<PanelSource> panels;
+  private final Rooms rooms;
 
   public DashboardModel(List<PanelSource> panels) {
+    this(panels, (panel, name, id) -> null);
+  }
+
+  public DashboardModel(List<PanelSource> panels, Rooms rooms) {
     this.panels = List.copyOf(panels);
+    this.rooms = rooms;
   }
 
   public List<PanelSource> panels() {
@@ -68,6 +80,7 @@ public final class DashboardModel {
         c.put("watts", round1(SpanReadings.consumptionWatts(tree, circuit.id())));
         c.put("on", SpanReadings.relay(tree, circuit.id()) == Relay.CLOSED);
         c.put("hidden", panel.hidden().contains(circuit.id()));
+        c.put("room", rooms.roomOf(panel.label(), SpanReadings.name(tree, circuit), circuit.id()));
         c.put("locked", !SpanReadings.relayControllable(tree, circuit));
         c.put("switchable", outlet != null && outlet.isSwitchable());
         circuits.add(c);

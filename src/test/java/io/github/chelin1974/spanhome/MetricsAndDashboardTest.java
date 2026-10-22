@@ -196,6 +196,24 @@ class MetricsAndDashboardTest {
   }
 
   @Test
+  @DisplayName("state carries each circuit's room from the config, null when it has none")
+  void rooms() {
+    DashboardModel withRooms = new DashboardModel(model.panels(),
+        (panel, name, id) -> id.equals(HOT_TUB) ? "Backyard" : null);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> panel = (Map<String, Object>) ((List<Object>) withRooms.state(false).get("panels")).get(0);
+    int seen = 0;
+    for (Object o : (List<Object>) panel.get("circuits")) {
+      @SuppressWarnings("unchecked")
+      Map<String, Object> c = (Map<String, Object>) o;
+      assertTrue(c.containsKey("room"));
+      assertEquals(c.get("id").equals(HOT_TUB) ? "Backyard" : null, c.get("room"));
+      seen++;
+    }
+    assertTrue(seen > 1);
+  }
+
+  @Test
   @DisplayName("state lists every circuit with watts, relay, lock and hidden flags, plus totals and battery")
   void state() throws Exception {
     try (DashboardServer s = server("1234")) {

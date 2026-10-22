@@ -25,6 +25,18 @@ class ConfigAndStorageTest {
   }
 
   @Test
+  @DisplayName("rooms match circuits by name, panel and name, or ID; the first room listed wins")
+  void rooms() throws Exception {
+    SpanHomeConfig config = config("{\"panels\":[{\"serial\":\"nj-2410-00h2v\"}],"
+        + "\"rooms\":{\"Kitchen\":[\"oven\",\"Second: Fridge\"],\"Garage\":[\"abc123\",\"Oven\"]}}");
+    assertEquals("Kitchen", config.roomOf("Main", "Oven", "x"));
+    assertEquals("Kitchen", config.roomOf("Second", "Fridge", "y"));
+    assertEquals(null, config.roomOf("Main", "Fridge", "y"));
+    assertEquals("Garage", config.roomOf("Main", "EV Charger", "ABC123"));
+    assertEquals(null, config("{\"panels\":[{\"serial\":\"nj-2410-00h2v\"}]}").roomOf("Main", "Oven", "x"));
+  }
+
+  @Test
   @DisplayName("every circuit is switchable when switchCircuits is not given")
   void switchableByDefault() throws Exception {
     SpanHomeConfig config = config("{\"panels\":[{\"serial\":\"nj-2410-00h2v\"}]}");

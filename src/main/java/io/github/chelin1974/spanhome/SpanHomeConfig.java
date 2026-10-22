@@ -6,8 +6,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * {@code span-home.config.json}: which panels to bridge and which circuits Home may switch.
@@ -73,6 +75,13 @@ public final class SpanHomeConfig {
 
   /** Circuits left out of Home entirely, matched the same way. */
   public List<String> hiddenCircuits = new ArrayList<>();
+
+  /**
+   * Rooms for the dashboard's room sort: room name to the circuits in it, matched the same way.
+   * HomeKit doesn't tell accessories which room they're in, so the dashboard can't read the Home
+   * app's rooms.
+   */
+  public Map<String, List<String>> rooms = new LinkedHashMap<>();
 
   /** Publish a backup-battery accessory when a panel has a battery commissioned. */
   public Boolean showBattery = true;
@@ -182,6 +191,9 @@ public final class SpanHomeConfig {
     if (hiddenCircuits == null) {
       hiddenCircuits = new ArrayList<>();
     }
+    if (rooms == null) {
+      rooms = new LinkedHashMap<>();
+    }
   }
 
   /** The Prometheus base URL, when configured. */
@@ -244,6 +256,17 @@ public final class SpanHomeConfig {
 
   public boolean isHidden(String panelLabel, String circuitName, String circuitId) {
     return matches(hiddenCircuits, panelLabel, circuitName, circuitId, false);
+  }
+
+  /** The first room in {@code rooms} that lists this circuit, or null. */
+  public String roomOf(String panelLabel, String circuitName, String circuitId) {
+    for (Map.Entry<String, List<String>> room : rooms.entrySet()) {
+      if (room.getKey() != null && !room.getKey().isBlank() && room.getValue() != null
+          && matches(room.getValue(), panelLabel, circuitName, circuitId, false)) {
+        return room.getKey().trim();
+      }
+    }
+    return null;
   }
 
   static boolean matches(

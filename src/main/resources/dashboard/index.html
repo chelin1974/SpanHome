@@ -147,6 +147,19 @@ button:focus-visible, .breaker:focus-visible { outline: 2px solid var(--focus); 
 .arm-note { grid-column: 1 / -1; font-size: 12px; color: var(--warn); font-weight: 600; }
 .tag { font-family: var(--display); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule); border-radius: 4px; padding: 0 4px; }
 
+/* All panels in one list, biggest draw first */
+.ranked { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.ranked .breaker { min-height: 62px; }
+.breaker .w { margin-left: auto; }
+.ranked .where { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wired { display: grid; gap: 14px; }
+.ranked .room { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  margin-top: 8px; padding-bottom: 2px; border-bottom: 1px solid var(--rule); }
+.ranked .room:first-child { margin-top: 0; }
+.ranked .room h3 { font-family: var(--display); font-weight: 700; font-size: 16px; margin: 0; }
+.ranked .room span { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.ranked .hint { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--muted); }
+
 /* Load list */
 .loads { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 6px 14px; }
 .loads ol { list-style: none; margin: 0; padding: 0; }
@@ -233,32 +246,37 @@ body { margin: 0; padding-top: env(safe-area-inset-top, 0px); padding-bottom: en
 
   <div class="bar">
     <div class="seg" role="group" aria-label="View">
-      <button type="button" id="vPanel" aria-pressed="true">Panel</button>
-      <button type="button" id="vLoads" aria-pressed="false">Biggest loads</button>
+      <button type="button" id="vAll" aria-pressed="true">All circuits</button>
+      <button type="button" id="vWired" aria-pressed="false">As wired</button>
     </div>
-    <div class="seg" role="group" aria-label="Panel" id="panelPick"></div>
+    <div class="seg" role="group" aria-label="Sort" id="sortPick">
+      <button type="button" data-sort="usage" aria-pressed="true">Usage</button>
+      <button type="button" data-sort="name" aria-pressed="false">Name</button>
+      <button type="button" data-sort="room" aria-pressed="false">Room</button>
+    </div>
   </div>
 
-  <section id="panelView" class="panel">
+  <section id="allView" class="panel">
     <div class="panel-head">
-      <h2 id="panelTitle">Panel</h2>
-      <span class="meta" id="panelMeta"></span>
+      <h2>All circuits</h2>
+      <span class="meta" id="allMeta"></span>
     </div>
-    <div class="board" id="board"></div>
+    <div class="ranked" id="ranked"></div>
   </section>
 
-  <section id="loadsView" class="loads" hidden>
-    <ol id="loadList"></ol>
-  </section>
+  <div id="wiredView" class="wired" hidden></div>
 
   <p class="note" id="historyNote"></p>
 
   <footer>
-    Odd spaces on the left, even on the right, as in the panel; two-pole breakers span two rows.
-    The graph behind each breaker is its draw over the last 24 hours, in 15-minute averages from
+    <b>All circuits</b> lists every circuit from both panels, sorted by usage, name or room
+    (rooms are set with <code>rooms</code> in the bridge's config). <b>As wired</b> draws
+    each panel as it is wired: odd spaces on the left, even on the right, two-pole breakers
+    spanning two rows. The graph behind each breaker is its draw over the last 24 hours, in 15-minute averages from
     Prometheus, scaled to that breaker's own peak; the dot is the current reading. Turning a
     circuit off takes two taps, because it cuts power at the breaker. <span class="tag">Locked</span>
-    circuits are ones the panel won't switch; dimmed ones are hidden from Home.
+    circuits are ones the panel won't switch; circuits hidden from Home appear, dimmed, only in
+    the wired view.
   </footer>
 </div>
 
@@ -284,13 +302,17 @@ const fmt = w => Math.round(w).toLocaleString("en-US");
 const fmtK = w => (w >= 1000 ? (w / 1000).toFixed(1) + " kW" : Math.round(w) + " W");
 const esc = s => String(s).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
 
-let state = null, history = null, lastOk = 0, view = "panel", panelIdx = 0;
+let state = null, history = null, lastOk = 0, view = "all", sortBy = "usage";
+let rankOrder = [];   // circuit ids in the order last shown, to keep near-equal loads from swapping
 let armed = null, armTimer = null, toastTimer = null, sheetDone = null;
 const pending = {};   // circuit id -> { on, until }: shown until the panel's report catches up
 
 function readPasscode() { try { return localStorage.getItem("span-home-passcode") || ""; } catch { return ""; } }
 function savePasscode(v) { try { v ? localStorage.setItem("span-home-passcode", v) : localStorage.removeItem("span-home-passcode"); } catch {} }
-try { view = localStorage.getItem("span-home-view") || "panel"; panelIdx = +(localStorage.getItem("span-home-panel") || 0); } catch {}
+try {
+  view = localStorage.getItem("span-home-view") === "wired" ? "wired" : "all";
+  sortBy = ["name", "room"].includes(localStorage.getItem("span-home-sort")) ? localStorage.getItem("span-home-sort") : "usage";
+} catch {}
 
 function toast(text) {
   const t = $("toast");
@@ -446,48 +468,101 @@ function renderSummary() {
   $("summary").innerHTML = tiles.join("");
 }
 
-function renderPicker() {
-  const pick = $("panelPick");
-  pick.hidden = view !== "panel" || state.panels.length < 2;
-  pick.innerHTML = state.panels.map((p, i) => `<button type="button" data-i="${i}" aria-pressed="${i === panelIdx}">${esc(p.label)}</button>`).join("");
-  pick.querySelectorAll("button").forEach(b => (b.onclick = () => { panelIdx = +b.dataset.i; try { localStorage.setItem("span-home-panel", panelIdx); } catch {} render(); }));
+function breakerEl(c, p, where) {
+  const el = document.createElement("button");
+  el.type = "button";
+  el.className = "breaker" + (c.on ? " on" : " off") + (c.locked || (!c.switchable && !c.hidden) ? " locked" : "") +
+    (c.hidden ? " hidden-c" : "") + (armed === c.id ? " armed" : "") + (p.connected ? "" : " offline");
+  el.setAttribute("aria-pressed", String(c.on));
+  el.setAttribute("aria-label", `${c.name}, ${p.label} panel, space ${c.spaces.join(" and ")}, ${fmt(draw(c))} watts, ${c.on ? "on" : "off"}`);
+  if (c.hidden) el.disabled = true;
+  const pts = seriesFor(c.id, draw(c));
+  let graph = "", peakText = "no history yet";
+  if (pts) {
+    const spark = sparkSvg(pts), peak = Math.max(...pts.filter(v => v != null));
+    graph = `<span class="spark">${spark.html}<span class="dot" style="bottom:${((draw(c) / spark.max) * 0.95 * 72).toFixed(1)}%"></span></span>`;
+    peakText = peak > 0 ? "24 h peak " + fmtK(peak) : "idle 24 h";
+    el.title = peak > 0 ? `Last 24 h: peak ${fmtK(peak)}` : "No draw in the last 24 h";
+  }
+  const tag = c.locked ? "Locked" : c.hidden ? "Hidden" : !c.switchable ? "Read-only" : "";
+  el.innerHTML = `${graph}
+    <span class="name">${esc(c.name)}</span>
+    <span class="toggle" aria-hidden="true"></span>
+    ${where ? `<span class="row2"><span class="where">${where}</span></span>` : ""}
+    <span class="row2">${where ? "" : `<span class="space">${c.spaces.join("·")}</span>`}<span class="pk">${peakText}</span><span class="w">${fmt(draw(c))} W</span></span>
+    ${tag ? `<span class="row2"><span class="tag">${tag}</span></span>` : ""}
+    ${armed === c.id ? '<span class="arm-note">Tap again to cut power</span>' : ""}`;
+  el.addEventListener("click", () => press(c, p));
+  return el;
 }
 
-function renderBoard() {
-  if (panelIdx >= state.panels.length) panelIdx = 0;
-  const p = state.panels[panelIdx], circuits = circuitsOf(p), board = $("board");
-  board.innerHTML = "";
+// Loads within about 15% of each other share a bucket and keep their previous order, so the list
+// doesn't reshuffle every two seconds as readings wobble. Under 5 W counts as idle.
+const bucket = w => (w < 5 ? -1 : Math.floor(Math.log(w) / Math.log(1.15)));
+
+const byName = (a, b) => a.c.name.localeCompare(b.c.name, undefined, { numeric: true, sensitivity: "base" }) ||
+  a.p.label.localeCompare(b.p.label);
+function byUsage(items) {
+  const prev = new Map(rankOrder.map((id, i) => [id, i]));
+  return items.sort((a, b) =>
+    bucket(draw(b.c)) - bucket(draw(a.c)) ||
+    (prev.get(a.c.id) ?? 1e9) - (prev.get(b.c.id) ?? 1e9) ||
+    draw(b.c) - draw(a.c) || byName(a, b));
+}
+
+function renderAll() {
+  const items = state.panels.flatMap(p => circuitsOf(p).filter(counted).map(c => ({ c, p })));
+  const grid = $("ranked"), many = state.panels.length > 1;
+  grid.innerHTML = "";
+  const card = ({ c, p }) => grid.appendChild(breakerEl(c, p,
+    (many ? esc(p.label) + " · " : "") + "space " + c.spaces.join(" & ")));
+
+  if (sortBy === "room") {
+    const rooms = new Map();
+    for (const it of items) {
+      const r = it.c.room || "";
+      if (!rooms.has(r)) rooms.set(r, []);
+      rooms.get(r).push(it);
+    }
+    const names = [...rooms.keys()].filter(Boolean).sort((a, b) => a.localeCompare(b));
+    if (rooms.has("")) names.push("");
+    if (!names.some(Boolean)) {
+      grid.insertAdjacentHTML("beforeend", `<p class="hint">No rooms set yet. Add them to <code>span-home.config.json</code>,
+        for example <code>"rooms": {"Kitchen": ["Oven", "Dishwasher"]}</code>, and restart the bridge.</p>`);
+    }
+    const ordered = [];
+    for (const r of names) {
+      const group = byUsage(rooms.get(r));
+      const watts = group.reduce((a, i) => a + draw(i.c), 0);
+      grid.insertAdjacentHTML("beforeend", `<div class="room"><h3>${r ? esc(r) : "No room"}</h3><span>${fmt(watts)} W</span></div>`);
+      group.forEach(it => { ordered.push(it.c.id); card(it); });
+    }
+    rankOrder = ordered;
+  } else {
+    if (sortBy === "name") items.sort(byName); else byUsage(items);
+    rankOrder = items.map(i => i.c.id);
+    items.forEach(card);
+  }
+  const total = items.reduce((a, i) => a + draw(i.c), 0), drawing = items.filter(i => draw(i.c) >= 5).length;
+  $("allMeta").textContent = `${items.length} circuits · ${drawing} drawing power · ${fmt(total)} W`;
+}
+
+function panelSection(p) {
+  const sec = document.createElement("section");
+  sec.className = "panel";
+  const circuits = circuitsOf(p), shown = circuits.filter(counted);
+  const meta = [p.serial, p.model && p.model.replace("_", " "), p.firmware, `${shown.length} circuits`,
+    `${fmt(shown.reduce((a, c) => a + draw(c), 0))} W`, p.volts ? `${Math.round(p.volts)} V` : null].filter(Boolean).join(" · ");
+  sec.innerHTML = `<div class="panel-head"><h2>${esc(p.label)} panel</h2><span class="meta">${esc(meta)}</span></div><div class="board"></div>`;
+  const board = sec.querySelector(".board");
   const used = new Set();
   let maxSpace = 0;
   for (const c of circuits) {
     if (!c.spaces.length) continue;
     c.spaces.forEach(s => { used.add(s); maxSpace = Math.max(maxSpace, s); });
-    const first = slotFor(c.spaces[0]);
-    const el = document.createElement("button");
-    el.type = "button";
-    el.className = "breaker" + (c.on ? " on" : " off") + (c.locked || (!c.switchable && !c.hidden) ? " locked" : "") +
-      (c.hidden ? " hidden-c" : "") + (armed === c.id ? " armed" : "") + (p.connected ? "" : " offline");
+    const first = slotFor(c.spaces[0]), el = breakerEl(c, p, "");
     el.style.gridColumn = first.col;
     el.style.gridRow = `${first.row} / span ${c.spaces.length}`;
-    el.setAttribute("aria-pressed", String(c.on));
-    el.setAttribute("aria-label", `${c.name}, space ${c.spaces.join(" and ")}, ${fmt(draw(c))} watts, ${c.on ? "on" : "off"}`);
-    if (c.hidden) el.disabled = true;
-    const pts = seriesFor(c.id, draw(c));
-    let graph = "", peakText = "no history yet";
-    if (pts) {
-      const spark = sparkSvg(pts), peak = Math.max(...pts.filter(v => v != null));
-      graph = `<span class="spark">${spark.html}<span class="dot" style="bottom:${((draw(c) / spark.max) * 0.95 * 72).toFixed(1)}%"></span></span>`;
-      peakText = peak > 0 ? "24 h peak " + fmtK(peak) : "idle 24 h";
-      el.title = peak > 0 ? `Last 24 h: peak ${fmtK(peak)}` : "No draw in the last 24 h";
-    }
-    const tag = c.locked ? "Locked" : c.hidden ? "Hidden" : !c.switchable ? "Read-only" : "";
-    el.innerHTML = `${graph}
-      <span class="name">${esc(c.name)}</span>
-      <span class="toggle" aria-hidden="true"></span>
-      <span class="row2"><span class="space">${c.spaces.join("·")}</span><span class="pk">${peakText}</span><span class="w">${fmt(draw(c))} W</span></span>
-      ${tag ? `<span class="row2"><span class="tag">${tag}</span></span>` : ""}
-      ${armed === c.id ? '<span class="arm-note">Tap again to cut power</span>' : ""}`;
-    el.addEventListener("click", () => press(c, p));
     board.appendChild(el);
   }
   const last = maxSpace <= 16 ? 16 : maxSpace <= 24 ? 24 : maxSpace <= 32 ? 32 : maxSpace + (maxSpace % 2);
@@ -499,31 +574,13 @@ function renderBoard() {
     el.innerHTML = `<span class="name">Open space</span><span class="row2"><span class="space">${s}</span></span>`;
     board.appendChild(el);
   }
-  const shown = circuits.filter(counted);
-  $("panelTitle").textContent = p.label + " panel";
-  $("panelMeta").textContent = [p.serial, p.model && p.model.replace("_", " "), p.firmware, `${shown.length} circuits`,
-    `${fmt(shown.reduce((a, c) => a + draw(c), 0))} W`, p.volts ? `${Math.round(p.volts)} V` : null].filter(Boolean).join(" · ");
+  return sec;
 }
 
-function renderLoads() {
-  const list = $("loadList");
-  const rows = state.panels.flatMap(p => circuitsOf(p).filter(counted).map(c => ({ c, p })))
-    .sort((a, b) => draw(b.c) - draw(a.c) || a.c.name.localeCompare(b.c.name)).slice(0, 15);
-  const max = Math.max(...rows.map(r => draw(r.c)), 1);
-  list.innerHTML = "";
-  for (const { c, p } of rows) {
-    const li = document.createElement("li");
-    li.className = (c.on ? "on" : "") + (armed === c.id ? " armed" : "");
-    const pts = seriesFor(c.id, draw(c));
-    li.innerHTML = `
-      <span class="who"><b>${esc(c.name)}</b><span>${esc(p.label)} · space ${c.spaces.join(" & ")}${c.locked ? " · locked" : !c.switchable ? " · read-only" : ""}${armed === c.id ? " · tap again to cut power" : ""}</span></span>
-      <span class="ls" title="Last 24 h">${pts ? sparkSvg(pts).html : ""}</span>
-      <span class="w">${fmt(draw(c))} W</span>
-      <button type="button" class="toggle" aria-pressed="${c.on}" aria-label="Turn ${esc(c.name)} ${c.on ? "off" : "on"}"></button>
-      <span class="lm"><i style="width:${(draw(c) / max) * 100}%"></i></span>`;
-    li.querySelector("button").addEventListener("click", () => press(c, p));
-    list.appendChild(li);
-  }
+function renderWired() {
+  const wrap = $("wiredView");
+  wrap.innerHTML = "";
+  state.panels.forEach(p => wrap.appendChild(panelSection(p)));
 }
 
 function renderHistoryNote() {
@@ -540,18 +597,24 @@ function render() {
   if (!state) return;
   $("subtitle").textContent = "SPAN panels · " + state.panels.map(p => p.label).join(" and ");
   renderSummary();
-  renderPicker();
-  $("vPanel").setAttribute("aria-pressed", String(view === "panel"));
-  $("vLoads").setAttribute("aria-pressed", String(view === "loads"));
-  $("panelView").hidden = view !== "panel";
-  $("loadsView").hidden = view !== "loads";
-  if (view === "panel") renderBoard(); else renderLoads();
+  $("vAll").setAttribute("aria-pressed", String(view === "all"));
+  $("vWired").setAttribute("aria-pressed", String(view === "wired"));
+  $("sortPick").hidden = view !== "all";
+  $("sortPick").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.sort === sortBy)));
+  $("allView").hidden = view !== "all";
+  $("wiredView").hidden = view !== "wired";
+  if (view === "all") renderAll(); else renderWired();
   renderHistoryNote();
 }
 
 function setView(v) { view = v; try { localStorage.setItem("span-home-view", v); } catch {} render(); }
-$("vPanel").onclick = () => setView("panel");
-$("vLoads").onclick = () => setView("loads");
+$("vAll").onclick = () => setView("all");
+$("vWired").onclick = () => setView("wired");
+$("sortPick").querySelectorAll("button").forEach(b => (b.onclick = () => {
+  sortBy = b.dataset.sort; rankOrder = [];
+  try { localStorage.setItem("span-home-sort", sortBy); } catch {}
+  render();
+}));
 
 pollState();
 pollHistory();
