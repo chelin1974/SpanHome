@@ -142,6 +142,25 @@ public final class DashboardModel {
     });
   }
 
+  /**
+   * The circuit IDs behind a dashboard circuit: its legs when combined, itself otherwise.
+   * Empty for an ID no panel has, so nothing unknown reaches a Prometheus query.
+   */
+  public Optional<List<String>> legsOf(String circuitId) {
+    for (PanelSource panel : panels) {
+      CircuitOutlet outlet = panel.outlets().get(circuitId);
+      if (outlet != null) {
+        return Optional.of(outlet.legs());
+      }
+      for (Device circuit : SpanReadings.circuits(panel.tree())) {
+        if (circuit.id().equals(circuitId)) {
+          return Optional.of(List.of(circuitId));
+        }
+      }
+    }
+    return Optional.empty();
+  }
+
   /** Switches a circuit through its HomeKit outlet, so Home and the page stay in step. */
   public RelayResult setRelay(String circuitId, boolean on) {
     for (PanelSource panel : panels) {

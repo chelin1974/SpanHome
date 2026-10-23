@@ -196,6 +196,18 @@ class MetricsAndDashboardTest {
   }
 
   @Test
+  @DisplayName("legsOf resolves a circuit, a combined circuit's legs, and nothing for unknown IDs")
+  void legsOf() {
+    assertEquals(java.util.Optional.of(List.of(HOT_TUB)), model.legsOf(HOT_TUB));
+    assertEquals(java.util.Optional.of(List.of(PanelFixture.PV)), model.legsOf(PanelFixture.PV));
+    assertTrue(model.legsOf("x\"}) or vector(1)").isEmpty());
+    CircuitOutlet garage = new CircuitOutlet(9, List.of(HOT_TUB, FRIDGE), "Garage", PANEL, tree, true, (id, on) -> {}, scheduler);
+    DashboardModel combined = new DashboardModel(List.of(new PanelSource("Main", tree,
+        Map.of(HOT_TUB, garage, FRIDGE, garage), Set.of(), connected::get)));
+    assertEquals(java.util.Optional.of(List.of(HOT_TUB, FRIDGE)), combined.legsOf(FRIDGE));
+  }
+
+  @Test
   @DisplayName("a combined circuit is one dashboard entry with both legs' spaces and summed watts")
   void combinedEntry() throws Exception {
     CircuitOutlet garage = new CircuitOutlet(9, List.of(HOT_TUB, FRIDGE), "Garage", PANEL, tree, true,

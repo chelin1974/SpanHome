@@ -205,6 +205,9 @@ and house totals, the battery, a 24-hour graph behind each breaker, and switchin
   (biggest draw first), **name**, or **room**. Rooms come from `rooms` in the config: the Home
   app doesn't share its rooms with accessories, so the bridge can't read them from there.
 - **As wired** draws each panel the way it is wired.
+- **Tap a circuit** for its details: the last 24 hours against its 30-day average for each time
+  of day, its peaks, average draw, hours running, energy used, and the hours it's busiest.
+  These need Prometheus (see below). **Tap its switch** to turn it on or off.
 
 Open `http://<this-machine>.local:8089` (the exact address is in the startup log) from any phone
 or computer on your Wi-Fi. In Safari on iPhone, **Share → Add to Home Screen** makes it open like

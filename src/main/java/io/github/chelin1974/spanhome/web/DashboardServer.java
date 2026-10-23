@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
  *   GET  /                              the page
  *   GET  /api/state                     every circuit, total and battery reading, live
  *   GET  /api/history                   24 h of 15-minute averages, from Prometheus
+ *   GET  /api/circuits/{id}/detail      30 days of one circuit: averages, peaks, energy
  *   POST /api/circuits/{id}/relay       {"on": true|false}, with header X-Passcode
  * </pre>
  *
@@ -43,6 +44,7 @@ public final class DashboardServer implements AutoCloseable {
 
   private static final Logger log = LoggerFactory.getLogger(DashboardServer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final Pattern DETAIL = Pattern.compile("^/api/circuits/([A-Za-z0-9._:-]{1,128})/detail$");
   private static final Pattern RELAY = Pattern.compile("^/api/circuits/([A-Za-z0-9._:-]{1,128})/relay$");
 
   static final int MAX_FAILURES = 5;
@@ -108,8 +110,11 @@ public final class DashboardServer implements AutoCloseable {
         history(exchange);
       } else {
         Matcher relay = RELAY.matcher(path);
+        Matcher detail = DETAIL.matcher(path);
         if (relay.matches() && method.equals("POST")) {
           relay(exchange, relay.group(1), remote);
+        } else if (detail.matches() && method.equals("GET")) {
+          detail(exchange, detail.group(1));
         } else {
           send(exchange, 404, Map.of("error", "Not found"));
         }
@@ -143,6 +148,26 @@ public final class DashboardServer implements AutoCloseable {
     }
     try {
       Map<String, Object> body = new java.util.LinkedHashMap<>(history.last24Hours(System.currentTimeMillis()));
+      body.put("available", true);
+      send(exchange, 200, body);
+    } catch (Exception e) {
+      send(exchange, 200, Map.of("available", false,
+          "reason", "Prometheus at " + history.base() + " did not answer (" + e.getMessage() + ")."));
+    }
+  }
+
+  private void detail(HttpExchange exchange, String circuitId) throws IOException {
+    java.util.Optional<java.util.List<String>> legs = model.legsOf(circuitId);
+    if (legs.isEmpty()) {
+      send(exchange, 404, Map.of("error", "No such circuit."));
+      return;
+    }
+    if (history == null) {
+      send(exchange, 200, Map.of("available", false, "reason", "No Prometheus is configured, so there is no history to show."));
+      return;
+    }
+    try {
+      Map<String, Object> body = new java.util.LinkedHashMap<>(history.circuitDetail(legs.get(), System.currentTimeMillis()));
       body.put("available", true);
       send(exchange, 200, body);
     } catch (Exception e) {

@@ -147,6 +147,57 @@ button:focus-visible, .breaker:focus-visible { outline: 2px solid var(--focus); 
 .arm-note { grid-column: 1 / -1; font-size: 12px; color: var(--warn); font-weight: 600; }
 .tag { font-family: var(--display); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule); border-radius: 4px; padding: 0 4px; }
 
+/* Breaker cards open details; the toggle is its own button. */
+.breaker:not(.empty) { cursor: pointer; }
+.breaker:not(.empty):hover { border-color: var(--muted); }
+.breaker button.toggle { border: 0; padding: 0; cursor: pointer; }
+.breaker button.toggle::before { content: ""; position: absolute; inset: -10px -8px; } /* bigger tap target */
+.breaker.on button.toggle, .detail .switch.on { background: var(--on); }
+
+/* Circuit detail */
+.detail-back { position: fixed; inset: 0; background: rgb(0 0 0 / .45); z-index: 15; display: grid; place-items: center;
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
+.detail { background: var(--surface); color: var(--ink); border-radius: 14px; width: min(720px, 100%); max-height: 100%; overflow-y: auto;
+  padding: 18px 20px 20px; display: grid; gap: 16px; box-shadow: 0 12px 48px rgb(0 0 0 / .35); }
+.detail .dh { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 12px; align-items: start; }
+.detail h3 { font-family: var(--display); font-weight: 700; font-size: 24px; line-height: 1.1; margin: 0; overflow-wrap: anywhere; }
+.detail .sub { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
+.detail .close { font: inherit; font-size: 22px; line-height: 1; width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--rule);
+  background: var(--bg); color: var(--ink); cursor: pointer; }
+.detail .switch { font-family: var(--display); font-weight: 600; font-size: 15px; border-radius: 8px; padding: 8px 14px; border: 0;
+  background: var(--off); color: #fff; cursor: pointer; white-space: nowrap; }
+.detail .switch.armed { background: var(--warn); }
+.detail .switch:disabled { opacity: .5; cursor: default; }
+.detail .now { font-family: var(--mono); font-weight: 600; font-size: 34px; font-variant-numeric: tabular-nums; }
+.detail .now small { font-size: 15px; color: var(--muted); margin-left: 2px; }
+.detail h4 { font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: .03em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 6px; }
+.detail .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.detail .legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--load); vertical-align: middle; margin-right: 6px; }
+.detail .legend i.avg { border-top: 2px dashed var(--muted); }
+.chart { position: relative; height: 190px; touch-action: pan-y; }
+.chart svg { position: absolute; left: 34px; right: 0; top: 0; bottom: 20px; width: calc(100% - 34px); height: calc(100% - 20px); overflow: visible; }
+.chart .ya { position: absolute; left: 0; width: 30px; text-align: right; font-family: var(--mono); font-size: 10px; color: var(--muted); transform: translateY(-50%); }
+.chart .xa { position: absolute; bottom: 0; font-family: var(--mono); font-size: 10px; color: var(--muted); transform: translateX(-50%); white-space: nowrap; }
+.chart .grid { stroke: var(--rule); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.chart .day { fill: color-mix(in srgb, var(--load) 18%, transparent); }
+.chart .dayl { fill: none; stroke: var(--load); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.chart .avgl { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+.chart .cursor { stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.readout { font-size: 13px; min-height: 1.3em; color: var(--muted); }
+.readout b { color: var(--ink); font-family: var(--mono); font-weight: 600; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stat { background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; display: grid; gap: 2px; }
+.stat .l { font-size: 12px; color: var(--muted); }
+.stat .v { font-family: var(--mono); font-weight: 600; font-size: 18px; font-variant-numeric: tabular-nums; }
+.stat .s { font-size: 12px; color: var(--muted); }
+.hours { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; align-items: end; height: 90px; }
+.hours i { display: block; background: var(--well); border-radius: 2px 2px 0 0; min-height: 2px; }
+.hours i.top { background: var(--load); }
+.hours-x { display: grid; grid-template-columns: repeat(4, 1fr); font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 3px; }
+.detail .msg { font-size: 14px; color: var(--muted); margin: 0; }
+
 /* All panels in one list, biggest draw first */
 .ranked { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
 .ranked .breaker { min-height: 62px; }
@@ -275,7 +326,8 @@ body { margin: 0; padding-top: env(safe-area-inset-top, 0px); padding-bottom: en
     spanning two rows. The graph behind each breaker is its draw over the last 24 hours, in 15-minute averages from
     Prometheus, scaled to that breaker's own peak; the dot is the current reading. Turning a
     circuit off takes two taps, because it cuts power at the breaker. <span class="tag">Locked</span>
-    circuits are ones the panel won't switch; circuits hidden from Home appear, dimmed, only in
+    circuits are ones the panel won't switch. Tap a circuit for its usage over the last 30 days;
+    tap its switch to turn it on or off. Circuits hidden from Home appear, dimmed, only in
     the wired view.
   </footer>
 </div>
@@ -291,6 +343,10 @@ body { margin: 0; padding-top: env(safe-area-inset-top, 0px); padding-bottom: en
       <button type="submit" class="primary">Switch</button>
     </div>
   </form>
+</div>
+
+<div class="detail-back" id="detailBack" hidden>
+  <section class="detail" id="detail" role="dialog" aria-modal="true" aria-labelledby="dName"></section>
 </div>
 
 <div class="toast" id="toast" role="status" hidden></div>
@@ -478,13 +534,12 @@ function renderSummary() {
 }
 
 function breakerEl(c, p, where) {
-  const el = document.createElement("button");
-  el.type = "button";
+  const el = document.createElement("div");
+  el.tabIndex = 0;
+  el.setAttribute("role", "button");
   el.className = "breaker" + (c.on ? " on" : " off") + (c.locked || (!c.switchable && !c.hidden) ? " locked" : "") +
     (c.hidden ? " hidden-c" : "") + (armed === c.id ? " armed" : "") + (p.connected ? "" : " offline");
-  el.setAttribute("aria-pressed", String(c.on));
-  el.setAttribute("aria-label", `${c.name}, ${p.label} panel, space ${c.spaces.join(" and ")}, ${fmt(draw(c))} watts, ${c.on ? "on" : "off"}`);
-  if (c.hidden) el.disabled = true;
+  el.setAttribute("aria-label", `${c.name}, ${p.label} panel, space ${c.spaces.join(" and ")}, ${fmt(draw(c))} watts, ${c.on ? "on" : "off"}. Show usage details`);
   const pts = seriesFor(c.id, draw(c), c.legs);
   let graph = "", peakText = "no history yet";
   if (pts) {
@@ -496,12 +551,15 @@ function breakerEl(c, p, where) {
   const tag = c.locked ? "Locked" : c.hidden ? "Hidden" : !c.switchable ? "Read-only" : "";
   el.innerHTML = `${graph}
     <span class="name">${esc(c.name)}</span>
-    <span class="toggle" aria-hidden="true"></span>
+    ${c.hidden ? '<span class="toggle" aria-hidden="true"></span>' : `<button type="button" class="toggle" aria-pressed="${c.on}" aria-label="Turn ${esc(c.name)} ${c.on ? "off" : "on"}"></button>`}
     ${where ? `<span class="row2"><span class="where">${where}</span></span>` : ""}
     <span class="row2">${where ? "" : `<span class="space">${c.spaces.join("·")}${c.legs && c.legs.length > 1 ? " · combined" : ""}</span>`}<span class="pk">${peakText}</span><span class="w">${fmt(draw(c))} W</span></span>
     ${tag ? `<span class="row2"><span class="tag">${tag}</span></span>` : ""}
     ${armed === c.id ? '<span class="arm-note">Tap again to cut power</span>' : ""}`;
-  el.addEventListener("click", () => press(c, p));
+  const tg = el.querySelector("button.toggle");
+  if (tg) tg.addEventListener("click", e => { e.stopPropagation(); press(c, p); });
+  el.addEventListener("click", () => openDetail(c.id));
+  el.addEventListener("keydown", e => { if (e.target === el && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDetail(c.id); } });
   return el;
 }
 
@@ -623,8 +681,199 @@ function render() {
   $("allView").hidden = view !== "all";
   $("wiredView").hidden = view !== "wired";
   if (view === "all") renderAll(); else renderWired();
+  renderDetail();
   renderHistoryNote();
 }
+
+// ----------------------------------------------------------------- detail
+
+let detailId = null, detailData = null, detailCursor = null;
+
+function findCircuit(id) {
+  if (!state) return null;
+  for (const p of state.panels) for (const c of circuitsOf(p)) if (c.id === id) return { c, p };
+  return null;
+}
+function openDetail(id) {
+  detailId = id; detailData = null; detailCursor = null;
+  $("detailBack").hidden = false;
+  document.body.style.overflow = "hidden";
+  renderDetail(); loadDetail();
+}
+function closeDetail() {
+  detailId = null; detailData = null;
+  $("detailBack").hidden = true;
+  document.body.style.overflow = "";
+}
+async function loadDetail() {
+  const id = detailId;
+  let d;
+  try { d = await (await fetch(`/api/circuits/${encodeURIComponent(id)}/detail`, { cache: "no-store" })).json(); }
+  catch { d = { available: false, reason: "Couldn't reach the bridge." }; }
+  if (id !== detailId) return;
+  detailData = d; renderDetail();
+}
+$("detailBack").addEventListener("click", e => { if (e.target === $("detailBack")) closeDetail(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && detailId && $("sheetBack").hidden) closeDetail(); });
+
+const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+const hourFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric" });
+const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+const slotOf = t => { const d = new Date(t); return Math.floor((d.getHours() * 60 + d.getMinutes()) / 15); };
+const hourLabel = h => hourFmt.format(new Date(2026, 0, 1, h));
+const mean = a => { const v = a.filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
+
+// Everything the view shows, derived from the bridge's 30 days of 15-minute averages and peaks.
+// Times of day are folded in this device's own time zone.
+function analyse(d) {
+  const step = d.stepSeconds * 1000, n = d.avg.length, perDay = 86400000 / step;
+  const at = i => d.start + i * step;
+  const sums = new Array(96).fill(0), counts = new Array(96).fill(0);
+  d.avg.forEach((v, i) => { if (v != null) { const s = slotOf(at(i)); sums[s] += v; counts[s]++; } });
+  const profile = sums.map((x, i) => (counts[i] ? x / counts[i] : null));
+  const dayFrom = n - perDay - 1;
+  const day = d.avg.slice(dayFrom).map((v, k) => ({ t: at(dayFrom + k), v, avg: profile[slotOf(at(dayFrom + k))] }));
+  const peakOf = from => {
+    let best = null;
+    for (let i = from; i < n; i++) if (d.max[i] != null && (!best || d.max[i] > best.v)) best = { v: d.max[i], t: at(i) };
+    return best;
+  };
+  const hourly = Array.from({ length: 24 }, (_, h) => mean(profile.slice(h * 4, h * 4 + 4)));
+  const days = d.avg.filter(v => v != null).length / perDay;
+  const kwh = (range, from) => range != null ? range : (() => { const v = d.avg.slice(from).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) * (step / 3600000) / 1000 : null; })();
+  return {
+    day, hourly, days,
+    peak24: peakOf(n - perDay), peak30: peakOf(0),
+    avg24: mean(d.avg.slice(n - perDay)), avg30: mean(d.avg),
+    // Hours running: 15-minute slots above a tenth of the busiest slot, so standby draw
+    // (a hot tub's controller, a TV on standby) doesn't count.
+    ...(() => {
+      const cut = Math.max(5, 0.1 * Math.max(0, ...d.avg.filter(v => v != null)));
+      const hours = a => a.filter(v => v != null && v >= cut).length * (step / 3600000);
+      return { inUse24: hours(d.avg.slice(n - perDay)), inUse30: hours(d.avg), runCut: cut };
+    })(),
+    kwh24: kwh(d.kwh24h, n - perDay), kwh30: kwh(d.kwh30d, 0),
+  };
+}
+
+// Hours of the day with the highest average draw, as readable ranges: "6 pm–9 pm".
+function busiest(hourly) {
+  const ranked = hourly.map((v, h) => ({ v: v ?? 0, h })).sort((a, b) => b.v - a.v);
+  if (!ranked.length || ranked[0].v < 5) return { top: new Set(), text: "Mostly idle" };
+  const cut = Math.max(5, ranked[0].v * 0.6);
+  const top = new Set(ranked.filter(r => r.v >= cut).slice(0, 6).map(r => r.h));
+  const hours = [...top].sort((a, b) => a - b), ranges = [];
+  for (const h of hours) {
+    const last = ranges[ranges.length - 1];
+    if (last && last[1] === h - 1) last[1] = h; else ranges.push([h, h]);
+  }
+  if (ranges.length > 1 && ranges[0][0] === 0 && ranges[ranges.length - 1][1] === 23) {   // wraps past midnight
+    const first = ranges.shift(); ranges[ranges.length - 1][1] = first[1] + 24;
+  }
+  return { top, text: ranges.map(([a, b]) => `${hourLabel(a % 24)}–${hourLabel((b + 1) % 24)}`).join(", ") };
+}
+
+function chartSvg(day, peak) {
+  const n = day.length - 1, max = Math.max(peak, 1);
+  const x = i => ((i / n) * 100).toFixed(2), y = v => (100 - (v / max) * 96).toFixed(2);
+  let line = "", area = "", run = [];
+  const flush = () => {
+    if (run.length > 1) {
+      const dd = "M" + run.map(([i, v]) => `${x(i)},${y(v)}`).join(" L");
+      line += dd + " "; area += `${dd} L${x(run[run.length - 1][0])},100 L${x(run[0][0])},100 Z `;
+    }
+    run = [];
+  };
+  day.forEach((p, i) => (p.v == null ? flush() : run.push([i, p.v])));
+  flush();
+  const avg = day.map((p, i) => (p.avg == null ? null : `${x(i)},${y(p.avg)}`)).filter(Boolean);
+  const grid = [0.25, 0.5, 0.75].map(f => `<line class="grid" x1="0" x2="100" y1="${y(max * f)}" y2="${y(max * f)}"/>`).join("");
+  const cur = detailCursor != null ? `<line class="cursor" x1="${x(detailCursor)}" x2="${x(detailCursor)}" y1="0" y2="100"/>` : "";
+  return `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${grid}
+    <path class="day" d="${area}"/><path class="dayl" d="${line}"/>
+    ${avg.length > 1 ? `<path class="avgl" d="M${avg.join(" L")}"/>` : ""}${cur}</svg>`;
+}
+
+function renderDetail() {
+  if (!detailId) return;
+  const box = $("detail"), found = findCircuit(detailId);
+  if (!found) { box.innerHTML = `<p class="msg">This circuit is no longer reported by the panel.</p>`; return; }
+  const { c, p } = found;
+  const room = c.room ? ` · ${esc(c.room)}` : "";
+  const canSwitch = state.switching && c.switchable && !c.locked && !c.hidden && p.connected;
+  const swText = armed === c.id ? "Tap again to cut power" : c.on ? "Turn off" : "Turn on";
+  let html = `<div class="dh">
+      <h3 id="dName">${esc(c.name)}</h3>
+      ${c.hidden ? "" : `<button type="button" class="switch ${c.on ? "on" : ""} ${armed === c.id ? "armed" : ""}" id="dSwitch" ${canSwitch || !state.switching ? "" : "disabled"}>${swText}</button>`}
+      <button type="button" class="close" id="dClose" aria-label="Close">×</button>
+      <span class="sub">${esc(p.label)} panel · space ${c.spaces.join(" & ")}${c.legs && c.legs.length > 1 ? " · combined" : ""}${room}${c.locked ? " · locked by the panel" : !c.switchable ? " · read-only" : ""}</span>
+    </div>
+    <div class="now">${fmt(draw(c))}<small>W now</small></div>`;
+
+  if (!detailData) {
+    html += `<p class="msg">Loading 30 days of history…</p>`;
+  } else if (!detailData.available) {
+    html += `<p class="msg">${esc(detailData.reason || "No history available.")}</p>`;
+  } else {
+    const a = analyse(detailData);
+    const live = a.day.slice(); live[live.length - 1] = { ...live[live.length - 1], v: draw(c) };
+    const peak = Math.max(1, ...live.map(q => Math.max(q.v ?? 0, q.avg ?? 0)));
+    const busy = busiest(a.hourly);
+    const hmax = Math.max(1, ...a.hourly.map(v => v ?? 0));
+    const ticks = [0, 6, 12, 18, 24].map(k => {
+      const i = Math.round((k / 24) * (live.length - 1));
+      return `<span class="xa" style="left:calc(34px + (100% - 34px) * ${i / (live.length - 1)})">${k === 24 ? "now" : timeFmt.format(new Date(live[i].t))}</span>`;
+    }).join("");
+    const yt = [0, 0.5, 1].map(f => `<span class="ya" style="top:calc((100% - 20px) * ${(1 - f * 0.96).toFixed(3)})">${fmtK(peak * f).replace(" ", "")}</span>`).join("");
+    const cur = detailCursor != null ? live[detailCursor] : null;
+    const readout = cur
+      ? `<b>${timeFmt.format(new Date(cur.t))}</b> · ${cur.v == null ? "no reading" : `<b>${fmt(cur.v)} W</b>`}${cur.avg != null ? ` · 30-day average at this time ${fmt(cur.avg)} W` : ""}`
+      : "Drag across the graph to read values.";
+    const days = Math.min(30, Math.round(a.days));
+    const stat = (l, v, sub) => `<div class="stat"><span class="l">${l}</span><span class="v">${v}</span>${sub ? `<span class="s">${sub}</span>` : ""}</div>`;
+    const kwhText = v => (v == null ? "—" : v >= 10 ? v.toFixed(0) + " kWh" : v.toFixed(2) + " kWh");
+    html += `<div>
+        <h4>Last 24 hours</h4>
+        <div class="legend"><span><i></i>Last 24 h, 15-minute averages</span><span><i class="avg"></i>Average for the time of day, last ${days} day${days === 1 ? "" : "s"}</span></div>
+        <div class="chart" id="dChart">${yt}${chartSvg(live, peak)}${ticks}</div>
+        <div class="readout">${readout}</div>
+      </div>
+      <div class="stats">
+        ${stat("Peak, 24 h", a.peak24 ? fmtK(a.peak24.v) : "—", a.peak24 ? timeFmt.format(new Date(a.peak24.t)) : "")}
+        ${stat(`Peak, ${days} days`, a.peak30 ? fmtK(a.peak30.v) : "—", a.peak30 ? dayFmt.format(new Date(a.peak30.t)) : "")}
+        ${stat("Average draw, 24 h", a.avg24 == null ? "—" : fmtK(a.avg24), a.avg30 == null ? "" : `${days}-day average ${fmtK(a.avg30)}`)}
+        ${stat("Running, 24 h", `${a.inUse24.toFixed(a.inUse24 < 10 ? 1 : 0)} h`, days ? `${(a.inUse30 / days).toFixed(1)} h a day on average · above ${fmtK(a.runCut)}` : "")}
+        ${stat("Energy, 24 h", kwhText(a.kwh24), "")}
+        ${stat(`Energy, ${days} days`, kwhText(a.kwh30), a.kwh30 != null && days ? `about ${kwhText(a.kwh30 / days)} a day` : "")}
+      </div>
+      <div>
+        <h4>When it's used</h4>
+        <p class="msg" style="margin-bottom:8px">Busiest: <b style="color:var(--ink)">${esc(busy.text)}</b> · average draw by hour, last ${days} day${days === 1 ? "" : "s"}</p>
+        <div class="hours" role="img" aria-label="Average draw for each hour of the day">${a.hourly.map((v, h) =>
+          `<i class="${busy.top.has(h) ? "top" : ""}" style="height:${(((v ?? 0) / hmax) * 100).toFixed(1)}%" title="${hourLabel(h)}: ${v == null ? "no data" : fmt(v) + " W"}"></i>`).join("")}</div>
+        <div class="hours-x"><span>${hourLabel(0)}</span><span>${hourLabel(6)}</span><span>${hourLabel(12)}</span><span>${hourLabel(18)}</span></div>
+      </div>`;
+  }
+  const scroll = box.scrollTop;
+  box.innerHTML = html;
+  box.scrollTop = scroll;
+  $("dClose").onclick = closeDetail;
+  const sw = $("dSwitch");
+  if (sw) sw.onclick = () => press(c, p);
+  const chart = $("dChart");
+  if (chart && detailData && detailData.available) {
+    const pick = e => {
+      const r = chart.getBoundingClientRect(), left = r.left + 34, w = r.width - 34;
+      const n = analyseLen();
+      detailCursor = Math.max(0, Math.min(n - 1, Math.round(((e.clientX - left) / w) * (n - 1))));
+      renderDetail();
+    };
+    chart.onpointerdown = pick;
+    chart.onpointermove = e => { if (e.buttons || e.pointerType === "mouse") pick(e); };
+    chart.onpointerleave = () => { if (detailCursor != null) { detailCursor = null; renderDetail(); } };
+  }
+}
+const analyseLen = () => 86400000 / (detailData.stepSeconds * 1000) + 1;
 
 function setView(v) { view = v; try { localStorage.setItem("span-home-view", v); } catch {} render(); }
 $("vAll").onclick = () => setView("all");
@@ -639,6 +888,7 @@ pollState();
 pollHistory();
 setInterval(() => { if ($("sheetBack").hidden && armed === null) pollState(); else renderStatus(); }, 2000);
 setInterval(pollHistory, 60000);
+setInterval(() => { if (detailId) loadDetail(); }, 60000);
 </script>
 </body>
 </html>
