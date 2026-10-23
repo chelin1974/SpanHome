@@ -245,7 +245,11 @@ after a reboot once Docker Desktop starts. Prometheus listens on this machine on
 (`grafana/dashboards/span-home.json`): house, panel, battery and grid right now; house and panel
 power over time; the circuits you pick, stacked; what's drawing now; the biggest energy users and
 kWh per day; today against the same time a week ago; battery charge and power, panel voltage and
-grid outages. Pick panels and circuits at the top, and the time range at the top right. Energy
+grid outages. Pick panels and circuits at the top, and the time range at the top right. A
+**Daikin Home** dashboard (`grafana/dashboards/daikin-home.json`) shows the thermostats from
+[DaikinHome](https://github.com/chelin1974/DaikinHome) when it sends to the same Prometheus:
+temperatures against setpoints, humidity, what the equipment is doing, heating and cooling hours,
+and the HVAC circuits' power from SPAN. Energy
 comes from each circuit's energy counter where the panel reports one, and otherwise from its
 watts. Changes you save in Grafana last until this repo's copy of the dashboard changes; to keep one
 for good, export the dashboard's JSON over `grafana/dashboards/span-home.json`.
