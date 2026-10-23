@@ -1,10 +1,18 @@
 # SpanHome
 
 Puts SPAN smart panels into Apple Home: every circuit as an outlet you can see and (if you
-allow it) switch, live power readings, and battery backup with a grid-outage sensor.
+allow it) switch, live power readings, and battery backup with a grid-outage sensor. It also
+serves **Breaker Board**, a live dashboard of every breaker for any phone or computer on your
+Wi-Fi, and can record everything in Prometheus for history and Grafana.
+
+<p align="center">
+  <img src="docs/images/breaker-board.png" width="760" alt="Breaker Board: house, panel and battery totals, then every circuit from both panels sorted by how much it is drawing, each with a 24-hour graph and a switch">
+</p>
 
 ```
 SPAN Panel  →  local SPAN API (MQTT over TLS)  →  this bridge  →  Apple Home / Siri
+                                                       ├──────→  Breaker Board (browser)
+                                                       └──────→  Prometheus → Grafana
 ```
 
 No cloud. The bridge talks to each panel on your home network through
@@ -12,6 +20,14 @@ No cloud. The bridge talks to each panel on your home network through
 released in 2026, and speaks the HomeKit Accessory Protocol directly via
 [HAP-Java](https://github.com/hap-java/HAP-Java). Changes show up in seconds, not minutes.
 Several panels share one bridge.
+
+**Contents:** [What shows up in Home](#what-shows-up-in-home) ·
+[Requirements](#requirements) · [Getting started](#getting-started) ·
+[Running it as a service](#running-it-as-a-service) ·
+[Breaker Board dashboard](#breaker-board-dashboard) ·
+[History with Prometheus](#history-with-prometheus-opentelemetry) ·
+[Configuration](#configuration) · [Files to keep](#files-to-keep) ·
+[Troubleshooting](#troubleshooting)
 
 ## What shows up in Home
 
@@ -58,26 +74,30 @@ commissioned solar and battery circuits, for instance) are always read-only.
 - **SPAN firmware with SPAN API.** Built against `spanos3/r202633` (the parent/child data
   model). The SPAN API beta started on the MAIN 32. `--list` prints each panel's model and
   firmware.
-- **Java 21 or newer** to run the bridge. Maven to build, or Docker (see below).
+- **Java 21 or newer** to run the bridge: `brew install openjdk@21` on a Mac,
+  `sudo apt install openjdk-21-jre-headless` on Debian or Ubuntu. Maven to build
+  (`brew install maven`, `sudo apt install maven`), or Docker instead.
 - **Docker** (optional) for Prometheus, Grafana and the build. The bridge itself runs outside
   Docker: on a Mac, Docker Desktop's VM doesn't pass the Bonjour traffic HomeKit and the
   panels' `.local` names depend on.
 - **A machine that stays on**, on the same network as the panels and your Home hub (Apple TV
   or HomePod). HomeKit finds the bridge over Bonjour, so no guest Wi-Fi or VLAN between them.
 
-## Setup
+## Getting started
 
-**1. Build.**
+**1. Build.** From the repo folder:
 
 ```bash
 mvn package
 ```
 
-Or without Maven installed, in Docker:
+Or, without Maven installed, in Docker:
 
 ```bash
 docker compose run --rm build
 ```
+
+Either way you get `target/span-home.jar`.
 
 **2. Configure.** Copy the example and set your panel serials (shown in the SPAN Home app):
 
@@ -104,7 +124,7 @@ door with the passphrase from the SPAN Home app; you'll be prompted for it:
 java -jar target/span-home.jar --register --passphrase
 ```
 
-Use `--panel nj-2410-00h35` to register just one.
+Use `--panel <serial>` to register just one.
 
 **4. Look before you switch anything on.**
 
@@ -120,29 +140,40 @@ Panel Main (nj-2410-00h2v) MAIN_32, firmware spanos3/r202633/04, 121 V
   Battery: 76%, discharging, on grid, ~10h12m backup
 ```
 
-Use the names exactly as listed in `readOnlyCircuits`, `switchCircuits` and `hiddenCircuits`.
+Use the names exactly as listed in `readOnlyCircuits`, `switchCircuits`, `hiddenCircuits`,
+`combinedCircuits` and `rooms`.
 
-**5. Run and pair.**
+**5. Start it and pair.**
 
 ```bash
 java -jar target/span-home.jar
 ```
 
-The log prints the address the bridge is advertised on and a setup code. In the Home app:
+It runs in that terminal until you press **Ctrl+C**. The log prints the address the bridge is
+advertised on, the Breaker Board address, and a setup code. In the Home app:
 **+ → Add Accessory → More options… → SPAN**, enter the code, and accept the "uncertified
 accessory" warning.
 
-For a permanent install, `span-home.service` is a systemd unit: copy it to
-`/etc/systemd/system/`, adjust the paths, and `systemctl enable --now span-home`.
+**6. History (optional).** To keep history for the dashboard's graphs and Grafana, start
+Prometheus and point the bridge at it, as described in
+[History with Prometheus](#history-with-prometheus-opentelemetry).
 
-### Run at login on a Mac (launchd)
+Once it works, stop it with Ctrl+C and set it up as a service, below, so it keeps running
+without a terminal.
 
-To keep the bridge running in the background, starting at login and restarting if it crashes,
-install it as a launchd agent. Stop any copy running in a terminal first: two can't share the
-HomeKit port.
+## Running it as a service
+
+Run it as a service so it starts on its own after a reboot and restarts if it crashes. Stop any
+copy running in a terminal first: two can't share the HomeKit port. The pairing travels with
+the files, so you don't need to pair again.
+
+### macOS (launchd)
+
+On a Mac the bridge runs as a launchd agent: it starts when you log in and is restarted if it
+stops.
 
 **1. Create the agent.** From the repo folder, after `mvn package`, paste this whole block.
-It records where your Java is and writes the agent definition:
+It records where your Java and the repo are, and writes the agent definition:
 
 ```bash
 JAVA="$(which java)"
@@ -177,13 +208,13 @@ EOF
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.github.chelin1974.spanhome.plist
 ```
 
-**3. Pair, if you haven't yet.** The setup code is in the log:
+**3. Check the log.** The setup code (if not paired yet) and the Breaker Board address are in it:
 
 ```bash
 tail -f ~/Library/Logs/span-home.log
 ```
 
-Press Ctrl-C to stop watching; the agent keeps running.
+Press Ctrl+C to stop watching; the agent keeps running.
 
 | To | Run |
 | --- | --- |
@@ -194,24 +225,114 @@ Press Ctrl-C to stop watching; the agent keeps running.
 
 The agent runs only while you're logged in and the Mac is awake. A sleeping laptop, lid
 closed included, takes the accessories to "No Response" until it wakes. For an always-on
-setup, use a Mac mini or a Linux box with the systemd unit above.
+setup, use a Mac mini set to never sleep, or a Linux box.
+
+**Prometheus and Grafana** come back on their own after a restart once Docker Desktop is
+running: in Docker Desktop, **Settings → General → Start Docker Desktop when you sign in**.
+
+### Linux (systemd)
+
+On Linux the bridge runs as a systemd service under its own user, from `/opt/span-home`.
+`span-home.service` in this repo is the unit file.
+
+**1. Install Java** (21 or newer), e.g. on Debian or Ubuntu:
+
+```bash
+sudo apt install openjdk-21-jre-headless
+```
+
+**2. Create a user and a folder for it, and copy in the jar, your config and the panel
+credentials** from [Getting started](#getting-started). If the bridge was already paired on
+another machine, copy its `span-home.state.json` and `span-home.accessories.json` too, so you
+don't have to pair again and your rooms and automations are kept.
+
+```bash
+sudo useradd --system --home-dir /opt/span-home --shell /usr/sbin/nologin span-home
+sudo mkdir -p /opt/span-home
+sudo cp target/span-home.jar span-home.config.json span-home.credentials.json /opt/span-home/
+sudo cp span-home.state.json span-home.accessories.json /opt/span-home/ 2>/dev/null || true
+sudo chown -R span-home: /opt/span-home
+sudo chmod 700 /opt/span-home
+```
+
+**3. Install and start the service.**
+
+```bash
+sudo cp span-home.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now span-home
+```
+
+**4. Check the log.** The setup code (if not paired yet) and the Breaker Board address are in it:
+
+```bash
+journalctl -u span-home -f
+```
+
+| To | Run |
+| --- | --- |
+| Restart (after a config change) | `sudo systemctl restart span-home` |
+| Stop / start | `sudo systemctl stop span-home` / `sudo systemctl start span-home` |
+| Check it's running | `systemctl status span-home` |
+| Read the log | `journalctl -u span-home -n 100` |
+| Stop it starting at boot | `sudo systemctl disable span-home` |
+
+**Firewall.** If the machine runs one, open HomeKit's port, Bonjour and the dashboard:
+
+```bash
+sudo ufw allow 51828/tcp   # HomeKit (the "port" setting)
+sudo ufw allow 5353/udp    # Bonjour, so the Home app can find the bridge
+sudo ufw allow 8089/tcp    # Breaker Board (the "dashboardPort" setting)
+```
+
+**Prometheus and Grafana** restart on their own with Docker (`restart: unless-stopped` in
+`docker-compose.yml`) as long as Docker starts at boot: `sudo systemctl enable docker`.
+
+### Updating
+
+```bash
+git pull
+mvn package
+```
+
+Then restart it: on a Mac, `launchctl kickstart -k gui/$(id -u)/io.github.chelin1974.spanhome`;
+on Linux, copy the new jar over and restart:
+
+```bash
+sudo cp target/span-home.jar /opt/span-home/
+sudo systemctl restart span-home
+```
 
 ## Breaker Board dashboard
 
-The bridge also serves a dashboard on your home network: live watts for every breaker, panel
-and house totals, the battery, a 24-hour graph behind each breaker, and switching.
+The bridge serves a dashboard on your home network: live watts for every breaker, panel and
+house totals, the battery, a 24-hour graph behind each breaker, and switching.
 
-- **All circuits** shows every circuit from both panels in one list, sorted by **usage**
+Open `http://<this-machine>.local:8089` from any phone or computer on your Wi-Fi; the exact
+address is in the startup log (`Breaker Board dashboard at http://…`). In Safari on iPhone,
+**Share → Add to Home Screen** makes it open like an app.
+
+- **All circuits** shows every circuit from all panels in one list, sorted by **usage**
   (biggest draw first), **name**, or **room**. Rooms come from `rooms` in the config: the Home
   app doesn't share its rooms with accessories, so the bridge can't read them from there.
-- **As wired** draws each panel the way it is wired.
+- **As wired** draws each panel the way it is wired: odd spaces on the left, even on the right,
+  two-pole breakers spanning two rows.
 - **Tap a circuit** for its details: the last 24 hours against its 30-day average for each time
   of day, its peaks, average draw, hours running, energy used, and the hours it's busiest.
-  These need Prometheus (see below). **Tap its switch** to turn it on or off.
+  These need [Prometheus](#history-with-prometheus-opentelemetry). **Tap its switch** to turn it
+  on or off.
 
-Open `http://<this-machine>.local:8089` (the exact address is in the startup log) from any phone
-or computer on your Wi-Fi. In Safari on iPhone, **Share → Add to Home Screen** makes it open like
-an app.
+<p align="center">
+  <img src="docs/images/circuit-detail.png" width="430" alt="A circuit's details: the last 24 hours drawn over its 30-day average, peaks, average draw, hours running, energy, and a bar per hour of the day showing when it is busiest">
+  &nbsp;
+  <img src="docs/images/breaker-board-phone.png" width="260" alt="Breaker Board on an iPhone in dark mode, with circuits grouped by room">
+</p>
+
+<p align="center">
+  <img src="docs/images/as-wired.png" width="640" alt="The As wired view: a panel drawn as it is wired, with a graph and switch on each breaker">
+</p>
+
+<sub>Screenshots use sample data.</sub>
 
 - **Switching** needs the household passcode you set as `dashboardPasscode`. Each device asks
   once and remembers it. Without a passcode the dashboard is view-only. Five wrong passcodes lock
@@ -241,18 +362,22 @@ docker compose --profile grafana up -d    # also Grafana on http://localhost:300
 in a Docker volume, so it survives restarts and upgrades; containers come back on their own
 after a reboot once Docker Desktop starts. Prometheus listens on this machine only.
 
-**Grafana** comes with Prometheus as its data source and a **SPAN Home** dashboard
-(`grafana/dashboards/span-home.json`): house, panel, battery and grid right now; house and panel
-power over time; the circuits you pick, stacked; what's drawing now; the biggest energy users and
-kWh per day; today against the same time a week ago; battery charge and power, panel voltage and
-grid outages. Pick panels and circuits at the top, and the time range at the top right. A
-**Daikin Home** dashboard (`grafana/dashboards/daikin-home.json`) shows the thermostats from
-[DaikinHome](https://github.com/chelin1974/DaikinHome) when it sends to the same Prometheus:
-temperatures against setpoints, humidity, what the equipment is doing, heating and cooling hours,
-and the HVAC circuits' power from SPAN. Energy
-comes from each circuit's energy counter where the panel reports one, and otherwise from its
-watts. Changes you save in Grafana last until this repo's copy of the dashboard changes; to keep one
-for good, export the dashboard's JSON over `grafana/dashboards/span-home.json`.
+**Grafana** (http://localhost:3000, sign in as admin / admin the first time) comes with
+Prometheus as its data source and two dashboards, under **Dashboards**:
+
+- **SPAN Home** (`grafana/dashboards/span-home.json`): house, panel, battery and grid right now;
+  house and panel power over time; the circuits you pick, stacked; what's drawing now; the
+  biggest energy users and kWh per day; today against the same time a week ago; battery charge
+  and power, panel voltage and grid outages. Energy comes from each circuit's energy counter
+  where the panel reports one, and otherwise from its watts.
+- **Daikin Home** (`grafana/dashboards/daikin-home.json`): the thermostats from
+  [DaikinHome](https://github.com/chelin1974/DaikinHome), when it sends to the same Prometheus:
+  temperatures against setpoints, humidity, what the equipment is doing, heating and cooling
+  hours, and the HVAC circuits' power from SPAN.
+
+Pick panels, circuits or thermostats at the top of each, and the time range at the top right.
+Changes you save in Grafana last until this repo's copy of that dashboard changes; to keep one
+for good, export the dashboard's JSON over its file in `grafana/dashboards`.
 
 `docker compose down` stops them and keeps the data; `docker compose down -v` deletes it.
 Without Docker, `brew install prometheus` and run it with the same flags as the compose file.
@@ -293,6 +418,9 @@ min_over_time(span_grid_connected[7d]) == 0               # any outage this week
 
 ## Configuration
 
+`span-home.config.json`, next to the jar or passed with `--config`. Restart the bridge after
+changing it.
+
 | Setting | Default | Notes |
 | --- | --- | --- |
 | `panels[].serial` | — | Required. |
@@ -303,17 +431,6 @@ min_over_time(span_grid_connected[7d]) == 0               # any outage this week
 | `hiddenCircuits` | none | Circuits left out of Home. No `"*"` here. |
 | `combinedCircuits` | none | Circuits that feed one load, shown and switched as one: `{"Garage": ["Second: Garage", "Second: Garage 2"]}`. See below. |
 | `rooms` | none | Room name to its circuits, for the dashboard's room sort, e.g. `{"Kitchen": ["Oven", "Dishwasher"]}`. Matched like the lists above. |
-
-**Combined circuits.** A 240 V load wired through two single-pole breakers shows up as two
-circuits, because that's how the panel reports it. `combinedCircuits` makes it one: one outlet
-and one Power tile in Home, one breaker on the dashboard. Its watts are the sum of its legs, it's
-on while any leg is on, and switching it switches every leg. If a leg can't be switched, the
-bridge switches the others back, so the load is never left on one leg. It's switchable only if
-every leg is. In Home it keeps the first leg's accessory, with its room and scenes; the other
-legs' accessories go away. Prometheus still records each leg on its own.
-
-In all of these lists a name ending in `*` matches every circuit whose name starts with the rest,
-which helps with long names: `"Master bed*"`, or `"Second: Lights*"` for one panel only.
 | `showBattery` | `true` | Publish the Grid/battery accessory when a battery is commissioned. |
 | `showWattsInHome` | `true` | A "<circuit> Power" tile for each circuit, so Home shows its draw. |
 | `showPanelPower` | `true` | Per-panel and whole-house power sensors. |
@@ -326,6 +443,28 @@ which helps with long names: `"Master bed*"`, or `"Second: Lights*"` for one pan
 | `otlpEndpoint` | `<prometheusUrl>/api/v1/otlp/v1/metrics` | Where OTLP metrics go, if not straight to Prometheus. |
 | `metricsIntervalSeconds` | `15` | Seconds between metric pushes. |
 | `storagePath`, `credentialsPath`, `accessoryIdsPath` | next to the config | See below. |
+
+**Combined circuits.** A 240 V load wired through two single-pole breakers shows up as two
+circuits, because that's how the panel reports it. `combinedCircuits` makes it one: one outlet
+and one Power tile in Home, one breaker on the dashboard. Its watts are the sum of its legs, it's
+on while any leg is on, and switching it switches every leg. If a leg can't be switched, the
+bridge switches the others back, so the load is never left on one leg. It's switchable only if
+every leg is. In Home it keeps the first leg's accessory, with its room and scenes; the other
+legs' accessories go away. Prometheus still records each leg on its own.
+
+In all of these lists a name ending in `*` matches every circuit whose name starts with the rest,
+which helps with long names: `"Master bed*"`, or `"Second: Lights*"` for one panel only.
+
+## Troubleshooting
+
+| Symptom | Try |
+| --- | --- |
+| The Home app doesn't find the bridge | Same network as your iPhone and Home hub, no guest Wi-Fi or VLAN in between. Check the advertised address in the log is your LAN IP; if not, set `bindAddress`. On Linux, open the firewall ports above. |
+| No setup code in the log | The bridge is already paired. To pair again, remove it in the Home app, stop the bridge, delete `span-home.state.json`, and start it. |
+| "panel … is not registered yet" | Run `--register` for that panel. |
+| Accessories show "No Response" | The bridge isn't running, or the machine is asleep. Check the log. |
+| Breaker Board graphs are empty | Set `prometheusUrl` and check Prometheus is running: `curl -s localhost:9090/-/ready`. Graphs fill in as history is recorded. |
+| Grafana panels say "No data" | Check Prometheus has the data: `curl -s 'localhost:9090/api/v1/query?query=span_house_power_watts'`. Restart Grafana with `docker compose --profile grafana restart grafana`. |
 
 ## Files to keep
 
