@@ -18,12 +18,24 @@
   "templating": {
     "list": [
       {
+        "type": "datasource",
+        "name": "datasource",
+        "label": "Data source",
+        "query": "prometheus",
+        "hide": 2,
+        "current": {},
+        "refresh": 1,
+        "regex": "",
+        "includeAll": false,
+        "multi": false
+      },
+      {
         "type": "query",
         "name": "thermostat",
         "label": "Thermostat",
         "datasource": {
           "type": "prometheus",
-          "uid": "prometheus"
+          "uid": "${datasource}"
         },
         "refresh": 2,
         "multi": true,
@@ -97,7 +109,7 @@
       "id": 2,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "",
       "gridPos": {
@@ -110,7 +122,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "(daikin_indoor_temperature_celsius{thermostat=~\"$thermostat\"}) * 9 / 5 + 32",
           "legendFormat": "{{thermostat}}",
@@ -152,7 +164,7 @@
       "id": 3,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "",
       "gridPos": {
@@ -165,7 +177,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "daikin_indoor_humidity_percent{thermostat=~\"$thermostat\"}",
           "legendFormat": "{{thermostat}}",
@@ -207,7 +219,7 @@
       "id": 4,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "",
       "gridPos": {
@@ -220,7 +232,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "(max(daikin_outdoor_temperature_celsius{thermostat=~\"$thermostat\"})) * 9 / 5 + 32",
           "legendFormat": "Outdoor",
@@ -262,7 +274,7 @@
       "id": 5,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 4,
@@ -274,7 +286,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "sum by (thermostat) (daikin_equipment_active{thermostat=~\"$thermostat\", activity=\"cooling\"}) * 1 + sum by (thermostat) (daikin_equipment_active{thermostat=~\"$thermostat\", activity=\"dehumidifying\"}) * 2 + sum by (thermostat) (daikin_equipment_active{thermostat=~\"$thermostat\", activity=\"heating\"}) * 3 + sum by (thermostat) (daikin_equipment_active{thermostat=~\"$thermostat\", activity=\"fan\"}) * 4 + sum by (thermostat) (daikin_equipment_active{thermostat=~\"$thermostat\", activity=\"idle\"}) * 5",
           "legendFormat": "{{thermostat}}",
@@ -359,7 +371,7 @@
       "id": 7,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "Dashed lines are the heat and cool setpoints.",
       "gridPos": {
@@ -372,7 +384,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "(daikin_indoor_temperature_celsius{thermostat=~\"$thermostat\"}) * 9 / 5 + 32",
           "legendFormat": "{{thermostat}}",
@@ -383,7 +395,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "(daikin_heat_setpoint_celsius{thermostat=~\"$thermostat\"}) * 9 / 5 + 32",
           "legendFormat": "{{thermostat}} heat setpoint",
@@ -394,7 +406,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "(daikin_cool_setpoint_celsius{thermostat=~\"$thermostat\"}) * 9 / 5 + 32",
           "legendFormat": "{{thermostat}} cool setpoint",
@@ -470,7 +482,7 @@
       "id": 8,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "",
       "gridPos": {
@@ -483,7 +495,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "(max(daikin_outdoor_temperature_celsius{thermostat=~\"$thermostat\"})) * 9 / 5 + 32",
           "legendFormat": "Outdoor",
@@ -536,7 +548,7 @@
       "id": 9,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "",
       "gridPos": {
@@ -549,7 +561,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "daikin_indoor_humidity_percent{thermostat=~\"$thermostat\"}",
           "legendFormat": "{{thermostat}} indoor",
@@ -560,7 +572,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "max(daikin_outdoor_humidity_percent{thermostat=~\"$thermostat\"})",
           "legendFormat": "Outdoor",
@@ -650,7 +662,7 @@
       "id": 11,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 7,
@@ -662,7 +674,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "sum by (thermostat) (daikin_equipment_active{thermostat=~\"$thermostat\", activity=\"cooling\"}) * 1 + sum by (thermostat) (daikin_equipment_active{thermostat=~\"$thermostat\", activity=\"dehumidifying\"}) * 2 + sum by (thermostat) (daikin_equipment_active{thermostat=~\"$thermostat\", activity=\"heating\"}) * 3 + sum by (thermostat) (daikin_equipment_active{thermostat=~\"$thermostat\", activity=\"fan\"}) * 4 + sum by (thermostat) (daikin_equipment_active{thermostat=~\"$thermostat\", activity=\"idle\"}) * 5",
           "legendFormat": "{{thermostat}}",
@@ -730,7 +742,7 @@
       "id": 12,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "Hours each thermostat spent heating, cooling, dehumidifying or running the fan over the time range at the top right.",
       "gridPos": {
@@ -743,7 +755,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "sum by (thermostat, activity) (sum_over_time(daikin_equipment_active{thermostat=~\"$thermostat\", activity!=\"idle\"}[$__range:1m])) / 60 > 0",
           "legendFormat": "{{thermostat}} {{activity}}",
@@ -785,7 +797,7 @@
       "id": 13,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "Each bar is the 24 hours before it, added across the thermostats picked at the top.",
       "gridPos": {
@@ -798,7 +810,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "sum by (activity) (sum_over_time(daikin_equipment_active{thermostat=~\"$thermostat\", activity=~\"heating|cooling\"}[1d:1m])) / 60",
           "legendFormat": "{{activity}}",
@@ -897,7 +909,7 @@
       "id": 15,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "The SPAN circuits that feed the heating and cooling; change which with HVAC circuits at the top. Needs SpanHome sending metrics to the same Prometheus.",
       "gridPos": {
@@ -910,7 +922,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "sum by (circuit) (span_circuit_power_watts{circuit=~\"$hvac\"})",
           "legendFormat": "{{circuit}}",
@@ -963,7 +975,7 @@
       "id": 16,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 9,
@@ -975,7 +987,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "(sum(increase(span_circuit_energy_joules_total{circuit=~\"$hvac\"}[$__range])) / 3.6e6) or (sum(sum_over_time(span_circuit_power_watts{circuit=~\"$hvac\"}[$__range:1m])) / 60000)",
           "legendFormat": "kWh",

@@ -27,12 +27,24 @@
   "templating": {
     "list": [
       {
+        "type": "datasource",
+        "name": "datasource",
+        "label": "Data source",
+        "query": "prometheus",
+        "hide": 2,
+        "current": {},
+        "refresh": 1,
+        "regex": "",
+        "includeAll": false,
+        "multi": false
+      },
+      {
         "type": "query",
         "name": "panel",
         "label": "Panel",
         "datasource": {
           "type": "prometheus",
-          "uid": "prometheus"
+          "uid": "${datasource}"
         },
         "refresh": 2,
         "multi": true,
@@ -56,7 +68,7 @@
         "label": "Circuit",
         "datasource": {
           "type": "prometheus",
-          "uid": "prometheus"
+          "uid": "${datasource}"
         },
         "refresh": 2,
         "multi": true,
@@ -112,7 +124,7 @@
       "id": 2,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "Sum of every panel's circuits.",
       "gridPos": {
@@ -125,7 +137,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "span_house_power_watts",
           "legendFormat": "House",
@@ -167,7 +179,7 @@
       "id": 3,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "",
       "gridPos": {
@@ -180,7 +192,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "sum by (panel) (span_panel_power_watts{panel=~\"$panel\"})",
           "legendFormat": "{{panel}}",
@@ -222,7 +234,7 @@
       "id": 4,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "",
       "gridPos": {
@@ -235,7 +247,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "span_battery_charge_percent",
           "legendFormat": "{{panel}}",
@@ -294,7 +306,7 @@
       "id": 5,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "Off grid means the house is running on the battery.",
       "gridPos": {
@@ -307,7 +319,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "min(span_grid_connected)",
           "legendFormat": "Grid",
@@ -376,7 +388,7 @@
       "id": 6,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "Energy drawn by all circuits over the time range picked at the top right.",
       "gridPos": {
@@ -389,7 +401,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "sum((sum by (circuit) (increase(span_circuit_energy_joules_total[$__range])) / 3.6e6) or (sum by (circuit) (sum_over_time(span_circuit_power_watts[$__range:1m])) / 60000))",
           "legendFormat": "kWh",
@@ -445,7 +457,7 @@
       "id": 8,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "",
       "gridPos": {
@@ -458,7 +470,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "span_house_power_watts",
           "legendFormat": "House",
@@ -469,7 +481,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "sum by (panel) (span_panel_power_watts{panel=~\"$panel\"})",
           "legendFormat": "{{panel}}",
@@ -549,7 +561,7 @@
       "id": 9,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "Stacked, so the top edge is their total. Pick circuits with the Circuit menu at the top.",
       "gridPos": {
@@ -562,7 +574,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "sum by (circuit) (span_circuit_power_watts{panel=~\"$panel\", circuit=~\"$circuit\"})",
           "legendFormat": "{{circuit}}",
@@ -618,7 +630,7 @@
       "id": 10,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "Every circuit drawing more than 5 W.",
       "gridPos": {
@@ -631,7 +643,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "sort_desc(sum by (circuit) (span_circuit_power_watts{panel=~\"$panel\"}) > 5)",
           "legendFormat": "{{circuit}}",
@@ -688,7 +700,7 @@
       "id": 12,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "kWh per circuit over the time range picked at the top right.",
       "gridPos": {
@@ -701,7 +713,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "topk(15, (sum by (circuit) (increase(span_circuit_energy_joules_total{panel=~\"$panel\"}[$__range])) / 3.6e6) or (sum by (circuit) (sum_over_time(span_circuit_power_watts{panel=~\"$panel\"}[$__range:1m])) / 60000))",
           "legendFormat": "{{circuit}}",
@@ -745,7 +757,7 @@
       "id": 13,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "Each bar is the 24 hours before it. Widen the time range to see more days.",
       "gridPos": {
@@ -758,7 +770,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "sum((sum by (circuit) (increase(span_circuit_energy_joules_total{panel=~\"$panel\"}[1d])) / 3.6e6) or (sum by (circuit) (sum_over_time(span_circuit_power_watts{panel=~\"$panel\"}[1d:1m])) / 60000))",
           "legendFormat": "kWh per day",
@@ -829,7 +841,7 @@
       "id": 15,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "",
       "gridPos": {
@@ -842,7 +854,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "span_house_power_watts",
           "legendFormat": "Today",
@@ -853,7 +865,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "span_house_power_watts offset 7d",
           "legendFormat": "Same time a week ago",
@@ -948,7 +960,7 @@
       "id": 17,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "",
       "gridPos": {
@@ -961,7 +973,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "span_battery_charge_percent",
           "legendFormat": "{{panel}}",
@@ -1019,7 +1031,7 @@
       "id": 18,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "Positive while charging, negative while discharging.",
       "gridPos": {
@@ -1032,7 +1044,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "span_battery_power_watts",
           "legendFormat": "{{panel}}",
@@ -1088,7 +1100,7 @@
       "id": 19,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "description": "",
       "gridPos": {
@@ -1101,7 +1113,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "span_panel_voltage_volts{panel=~\"$panel\"}",
           "legendFormat": "{{panel}}",
@@ -1158,7 +1170,7 @@
       "id": 20,
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 4,
@@ -1170,7 +1182,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "expr": "min(span_grid_connected)",
           "legendFormat": "Grid",
