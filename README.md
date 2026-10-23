@@ -239,8 +239,16 @@ docker compose --profile grafana up -d    # also Grafana on http://localhost:300
 `docker-compose.yml` runs Prometheus 3.5 with the OTLP receiver on, 400 days of retention, and
 `prometheus.yml` from this repo (no scraping, OTLP settings, an out-of-order window). Data lives
 in a Docker volume, so it survives restarts and upgrades; containers come back on their own
-after a reboot once Docker Desktop starts. Prometheus listens on this machine only. Grafana, if
-you start it, already has Prometheus as its data source.
+after a reboot once Docker Desktop starts. Prometheus listens on this machine only.
+
+**Grafana** comes with Prometheus as its data source and a **SPAN Home** dashboard
+(`grafana/dashboards/span-home.json`): house, panel, battery and grid right now; house and panel
+power over time; the circuits you pick, stacked; what's drawing now; the biggest energy users and
+kWh per day; today against the same time a week ago; battery charge and power, panel voltage and
+grid outages. Pick panels and circuits at the top, and the time range at the top right. Energy
+comes from each circuit's energy counter where the panel reports one, and otherwise from its
+watts. Changes you save in Grafana last until this repo's copy of the dashboard changes; to keep one
+for good, export the dashboard's JSON over `grafana/dashboards/span-home.json`.
 
 `docker compose down` stops them and keeps the data; `docker compose down -v` deletes it.
 Without Docker, `brew install prometheus` and run it with the same flags as the compose file.

@@ -1,0 +1,9 @@
+# Loads the dashboards in grafana/dashboards when Grafana starts.
+apiVersion: 1
+providers:
+  - name: SPAN Home
+    folder: ""
+    type: file
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
