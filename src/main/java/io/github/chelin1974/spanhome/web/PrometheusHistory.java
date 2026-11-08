@@ -1,7 +1,7 @@
 package io.github.chelin1974.spanhome.web;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -124,7 +124,7 @@ public final class PrometheusHistory {
       return null;
     }
     try {
-      double v = Double.parseDouble(result.get(0).path("value").get(1).asText());
+      double v = Double.parseDouble(result.get(0).path("value").get(1).asString());
       return Double.isFinite(v) ? Math.round(Math.max(0, v) * 100) / 100.0 : null;
     } catch (RuntimeException e) {
       return null;
@@ -140,8 +140,8 @@ public final class PrometheusHistory {
       throw new IllegalStateException("Prometheus answered HTTP " + response.statusCode());
     }
     JsonNode body = MAPPER.readTree(response.body());
-    if (!"success".equals(body.path("status").asText())) {
-      throw new IllegalStateException("Prometheus query failed: " + body.path("error").asText("unknown error"));
+    if (!"success".equals(body.path("status").asString())) {
+      throw new IllegalStateException("Prometheus query failed: " + body.path("error").asString("unknown error"));
     }
     return body;
   }
@@ -159,7 +159,7 @@ public final class PrometheusHistory {
         continue;
       }
       try {
-        double v = Double.parseDouble(pair.get(1).asText());
+        double v = Double.parseDouble(pair.get(1).asString());
         if (Double.isFinite(v)) {
           out[index] = round1(Math.max(0, v));
         }
@@ -172,14 +172,14 @@ public final class PrometheusHistory {
 
   /** Turns a query_range matrix into fixed-length series keyed for the page. Pure, for tests. */
   static Map<String, Object> parse(JsonNode body, long start, long end) {
-    if (!"success".equals(body.path("status").asText())) {
-      throw new IllegalStateException("Prometheus query failed: " + body.path("error").asText("unknown error"));
+    if (!"success".equals(body.path("status").asString())) {
+      throw new IllegalStateException("Prometheus query failed: " + body.path("error").asString("unknown error"));
     }
     Map<String, Double[]> series = new LinkedHashMap<>();
     for (JsonNode result : body.path("data").path("result")) {
       JsonNode labels = result.path("metric");
-      String key = labels.hasNonNull("circuit_id") ? labels.get("circuit_id").asText()
-          : labels.hasNonNull("panel_serial") ? "panel:" + labels.get("panel_serial").asText()
+      String key = labels.hasNonNull("circuit_id") ? labels.get("circuit_id").asString()
+          : labels.hasNonNull("panel_serial") ? "panel:" + labels.get("panel_serial").asString()
           : "house";
       Double[] values = series.computeIfAbsent(key, k -> new Double[POINTS]);
       for (JsonNode pair : result.path("values")) {
@@ -190,7 +190,7 @@ public final class PrometheusHistory {
         }
         double v;
         try {
-          v = Double.parseDouble(pair.get(1).asText());
+          v = Double.parseDouble(pair.get(1).asString());
         } catch (NumberFormatException e) {
           continue;
         }

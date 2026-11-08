@@ -1,7 +1,8 @@
 package io.github.chelin1974.spanhome;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -150,7 +151,7 @@ public final class SpanHomeConfig {
     SpanHomeConfig config;
     try {
       config = new ObjectMapper().readValue(Files.readString(file), SpanHomeConfig.class);
-    } catch (IOException e) {
+    } catch (IOException | JacksonException e) {
       throw new ConfigException("could not parse " + file.toAbsolutePath() + ": " + e.getMessage());
     }
     Path parent = file.toAbsolutePath().getParent();
