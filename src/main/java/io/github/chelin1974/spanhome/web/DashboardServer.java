@@ -16,6 +16,7 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -66,7 +67,26 @@ public final class DashboardServer implements AutoCloseable {
    * @param history null when no Prometheus is configured; the page then shows live readings only
    * @param passcode null or blank for a view-only page
    */
-  public DashboardServer(int port, DashboardModel model, PrometheusHistory history, String passcode) throws IOException {
+  /**
+   * Why the bridge is unreachable from Apple Home, or null while it is reachable.
+   *
+   * <p>Supplied rather than queried directly so the dashboard does not need to know about
+   * the bridge, and so {@code /healthz} answers with live state on every request.
+   */
+  private final Supplier<String> advertisementFailure;
+
+  public DashboardServer(int port, DashboardModel model, PrometheusHistory history, String passcode)
+      throws IOException {
+    this(port, model, history, passcode, () -> null);
+  }
+
+  /**
+   * @param advertisementFailure returns why HomeKit cannot reach the bridge, or null when
+   *     it can; drives {@code /healthz}
+   */
+  public DashboardServer(int port, DashboardModel model, PrometheusHistory history, String passcode,
+      Supplier<String> advertisementFailure) throws IOException {
+    this.advertisementFailure = advertisementFailure == null ? () -> null : advertisementFailure;
     this.model = model;
     this.history = history;
     this.passcode = passcode == null || passcode.isBlank() ? null : passcode.getBytes(StandardCharsets.UTF_8);
@@ -95,6 +115,19 @@ public final class DashboardServer implements AutoCloseable {
   private void handle(HttpExchange exchange) throws IOException {
     try (exchange) {
       InetAddress remote = exchange.getRemoteAddress().getAddress();
+
+      // Answered before the home-network check, deliberately. This is a supervisor's
+      // liveness endpoint, and a probe that got a 403 would fail forever and restart the
+      // container in a loop - a worse outcome than disclosing a status word, which is all
+      // this returns. Kubernetes probes arrive from the node, whose address is usually
+      // RFC1918 and would pass the check anyway, but a cluster on CGNAT space (100.64/10)
+      // would not, and that trap is not worth leaving in place.
+      if (exchange.getRequestMethod().equals("GET")
+          && exchange.getRequestURI().getPath().equals("/healthz")) {
+        healthz(exchange);
+        return;
+      }
+
       if (!isLocal(remote)) {
         send(exchange, 403, Map.of("error", "This dashboard only answers devices on the home network."));
         return;
@@ -227,6 +260,24 @@ public final class DashboardServer implements AutoCloseable {
   }
 
   /** Private IPv4, IPv6 unique-local, link-local and loopback. */
+  /**
+   * Liveness, for a supervisor rather than a person.
+   *
+   * <p>503 once the mDNS responder has died. The bridge is still serving this very page at
+   * that point, which is exactly the trap: without an endpoint that tells the truth, a
+   * liveness probe would keep passing forever while nothing in Apple Home could reach the
+   * bridge. JmDNS does not recover, so a restart is the only fix and a failing probe is
+   * how the supervisor learns to perform one.
+   */
+  private void healthz(HttpExchange exchange) throws IOException {
+    String failure = advertisementFailure.get();
+    if (failure == null) {
+      send(exchange, 200, Map.of("status", "ok", "discoverable", true));
+    } else {
+      send(exchange, 503, Map.of("status", "unhealthy", "discoverable", false, "error", failure));
+    }
+  }
+
   static boolean isLocal(InetAddress address) {
     if (address == null) {
       return false;

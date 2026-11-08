@@ -1,0 +1,25 @@
+target/
+
+.git/
+.gitignore
+.github/
+
+# Never bake credentials or pairing state into an image.
+span-home.config.json
+span-home.credentials.json
+*.state.json
+span-home.accessories.json
+span-home.layout.json
+
+deploy/
+docs/
+grafana/
+prometheus.yml
+*.md
+!README.md
+
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.log

@@ -1,14 +1,62 @@
-# Prometheus (and optionally Grafana) for SpanHome.
+# SpanHome's own stack: the bridge, Prometheus and Grafana.
 #
-#   docker compose up -d                      # Prometheus only
+#   docker compose up -d                      # Prometheus only, as before
 #   docker compose --profile grafana up -d    # Prometheus and Grafana
+#   docker compose --profile bridge up -d     # also run the bridge in a container
 #   docker compose run --rm build             # build target/span-home.jar, no local Maven needed
 #
-# The bridge itself runs outside Docker: HomeKit finds it over Bonjour, which does not cross
-# Docker Desktop's VM on macOS. It pushes to Prometheus at http://localhost:9090.
+# The bridge is behind a profile rather than on by default, on purpose: if you already run
+# it under systemd or launchd on this machine, starting a second copy would fight over
+# HomeKit port 51828 and the state files. `docker compose up -d` therefore still means
+# "Prometheus only", exactly as it did before.
+#
+# On Docker Desktop for Mac or Windows the bridge cannot work in a container at all: host
+# networking there does not give you the real LAN, so Bonjour never reaches your phone and
+# the panels are unreachable. Run the bridge outside Docker on those, and use this file for
+# Prometheus and Grafana only.
+#
+# This stack shares nothing with the DaikinHome or CellGateHome bridges - separate config,
+# separate volumes, separate ports - so any one of them runs with or without the others:
+#
+#   SpanHome      Prometheus 9090   Grafana 3000
+#   DaikinHome    Prometheus 9091   Grafana 3001
+#   CellGateHome  Prometheus 9092   Grafana 3002
 name: span-home
 
 services:
+  span-home:
+    build: .
+    image: ghcr.io/chelin1974/span-home:latest
+    profiles: ["bridge"]
+    container_name: span-home
+    restart: unless-stopped
+
+    # Required, not optional. HomeKit discovery is mDNS multicast on the local link, and
+    # this bridge also speaks MQTT to the panels on your network - a container on Docker's
+    # bridge network can do neither. Host networking also means the dashboard is on the
+    # host's own port 8089, so there is no `ports:` mapping here.
+    network_mode: host
+
+    volumes:
+      # Everything the bridge writes - pairing state, the panel credentials earned at
+      # registration, accessory IDs, the layout number - is resolved relative to the
+      # config file, so the config lives in the data directory with them.
+      #
+      # Put span-home.config.json in ./data before starting, and register with the panels
+      # first so ./data/span-home.credentials.json exists:
+      #     java -jar target/span-home.jar --config ./data/span-home.config.json --register
+      - ./data:/data
+
+    healthcheck:
+      # /healthz turns 503 once the mDNS responder has died, which is the failure that
+      # matters here: the dashboard keeps serving perfectly while nothing in Apple Home can
+      # reach the bridge.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8089 && printf 'GET /healthz HTTP/1.0\r\n\r\n' >&3 && head -1 <&3 | grep -q 200"]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 4
+
   prometheus:
     image: prom/prometheus:v3.5.0
     command:

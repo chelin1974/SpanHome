@@ -303,6 +303,51 @@ sudo cp target/span-home.jar /opt/span-home/
 sudo systemctl restart span-home
 ```
 
+## Docker and Kubernetes
+
+A `Dockerfile` builds the bridge, `docker-compose.yml` can run it alongside its own
+Prometheus and Grafana, and `deploy/k8s/` holds Kubernetes manifests. Images are published to
+`ghcr.io/chelin1974/span-home` by `.github/workflows/image.yml` for amd64 and arm64.
+
+```bash
+docker compose --profile bridge up -d       # the bridge in a container
+kubectl apply -k deploy/k8s                 # then the Secret - see deploy/k8s/README.md
+```
+
+**This bridge needs the local network for two reasons, and a container on a bridge or overlay
+network has neither.** HomeKit discovery is mDNS multicast to `224.0.0.251:5353` on the local
+link, and the bridge speaks MQTT directly to your panels. So it runs on the host's network —
+`network_mode: host` under Docker, `hostNetwork: true` in Kubernetes. That in turn means:
+
+- The container's ports are the host's ports: `8089` for the dashboard, `51828` for HomeKit.
+  (The DaikinHome bridge uses 8080/51826 and CellGateHome 8090/51829, so all three can share
+  a node.)
+- In Kubernetes the pod must be pinned to a node on the same LAN as your panels, your Apple
+  TV and your HomePod, which is what the `homekit=true` `nodeSelector` is for. **A cloud
+  cluster cannot host this at all.**
+- Docker Desktop on macOS and Windows does not give a container the real LAN, so host
+  networking does not help there. Run the bridge outside Docker on those, and use
+  `docker-compose.yml` for Prometheus and Grafana only — which is why the bridge sits behind
+  a `bridge` profile and `docker compose up -d` still means "Prometheus only".
+
+Three more things specific to this bridge:
+
+- **Register with your panels first, outside the cluster.** `--register` wants three door
+  presses or the app passphrase, which you cannot do from inside a pod. Register once, then
+  load the resulting `span-home.credentials.json` with `deploy/k8s/create-secret.sh`.
+- **Everything the bridge writes lives next to its config file** — pairing state, the panel
+  credentials, accessory IDs, the layout number — and one of those has no path override at
+  all. So in the cluster the config is copied onto the data volume and read from there, which
+  is what the init container in `deployment.yaml` does.
+- **One replica, `strategy: Recreate`.** Two copies would fight over the HomeKit port, the
+  state files and the panels' MQTT sessions.
+
+`deploy/k8s/README.md` has the full walkthrough. One failure gets special handling: JmDNS, the
+mDNS responder HomeKit depends on, can die under a running bridge and never come back,
+leaving it invisible to Apple Home while the dashboard keeps serving. The bridge now watches
+for that and turns `GET /healthz` into a 503 with the reason, then exits 70 so a supervisor
+restarts it.
+
 ## Breaker Board dashboard
 
 The bridge serves a dashboard on your home network: live watts for every breaker, panel and

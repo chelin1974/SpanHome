@@ -13,3 +13,6 @@ span-home.layout.json
 .vscode/
 .DS_Store
 *.log
+
+# Local data directory used by docker compose --profile bridge.
+data/

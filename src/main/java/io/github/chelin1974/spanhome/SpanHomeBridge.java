@@ -6,6 +6,7 @@ import io.github.chelin1974.spanhome.homekit.AccessoryIds;
 import io.github.chelin1974.spanhome.homekit.BackupBattery;
 import io.github.chelin1974.spanhome.homekit.CircuitOutlet;
 import io.github.chelin1974.spanhome.homekit.FileAuthInfo;
+import io.github.chelin1974.spanhome.homekit.MdnsWatchdog;
 import io.github.chelin1974.spanhome.homekit.HomeKitNames;
 import io.github.chelin1974.spanhome.homekit.LayoutVersion;
 import io.github.chelin1974.spanhome.homekit.NetworkAddresses;
@@ -23,6 +24,8 @@ import io.github.hapjava.accessories.HomekitAccessory;
 import io.github.hapjava.server.HomekitAccessoryCategories;
 import io.github.hapjava.server.impl.HomekitRoot;
 import io.github.hapjava.server.impl.HomekitServer;
+import javax.jmdns.JmDNS;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -34,6 +37,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.concurrent.ScheduledExecutorService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +58,10 @@ public final class SpanHomeBridge implements AutoCloseable {
 
   private final SpanHomeConfig config;
   private final List<SpanPanelConnection> connections = new ArrayList<>();
+  private MdnsWatchdog mdnsWatchdog;
+  private JmDNS jmdns;
+  private volatile Consumer<String> advertisementFailureListener = reason -> {};
+
   private final ScheduledExecutorService scheduler =
       Executors.newSingleThreadScheduledExecutor(r -> {
         Thread thread = new Thread(r, "span-home");
@@ -116,7 +125,14 @@ public final class SpanHomeBridge implements AutoCloseable {
           "advertising HomeKit on {}, a loopback address your iPhone cannot reach. Set \"bindAddress\" to this machine's LAN IP.",
           address.getHostAddress());
     }
-    server = new HomekitServer(address, config.port);
+    // The bridge creates the JmDNS instance itself rather than letting HAP-Java do it: a
+    // delegate - the callback that fires when JmDNS gives up recovering - can only be
+    // installed on an instance we hold. HomekitServer(JmDNS, port) then advertises through
+    // it and binds HTTP to jmdns.getInetAddress(), which is this same address.
+    mdnsWatchdog = new MdnsWatchdog(address, this::onAdvertisementDead);
+    jmdns = mdnsWatchdog.createJmDns(address);
+    mdnsWatchdog.schedule(scheduler, MdnsWatchdog.DEFAULT_PROBE_INTERVAL);
+    server = new HomekitServer(jmdns, config.port);
     bridge =
         server.createBridge(
             authInfo,
@@ -189,7 +205,8 @@ public final class SpanHomeBridge implements AutoCloseable {
     }
     PrometheusHistory history = config.prometheusUri().map(PrometheusHistory::new).orElse(null);
     try {
-      dashboard = new DashboardServer(config.dashboardPort, model, history, config.dashboardPasscode);
+      dashboard = new DashboardServer(config.dashboardPort, model, history, config.dashboardPasscode,
+          () -> advertisementFailure().orElse(null));
       dashboard.start();
       log.info("Breaker Board dashboard at http://{}:{}/{}",
           address.getHostAddress(), dashboard.port(),
@@ -366,6 +383,9 @@ public final class SpanHomeBridge implements AutoCloseable {
     if (exporter != null) {
       exporter.close();
     }
+    if (mdnsWatchdog != null) {
+      mdnsWatchdog.stop();
+    }
     scheduler.shutdownNow();
     if (bridge != null) {
       bridge.stop();
@@ -374,6 +394,45 @@ public final class SpanHomeBridge implements AutoCloseable {
       server.stop();
     }
     connections.forEach(SpanPanelConnection::close);
+    if (jmdns != null) {
+      try {
+        // Ours to close, since start() created it.
+        jmdns.close();
+      } catch (IOException e) {
+        log.debug("could not close JmDNS cleanly: {}", e.getMessage());
+      }
+    }
     terminated.countDown();
+  }
+
+  /**
+   * Why Apple Home can no longer reach this bridge, or empty while it still can.
+   *
+   * <p>Separate from whether the bridge is running, on purpose. A bridge whose mDNS
+   * responder has died is still running - still reading the panels, still serving the
+   * dashboard - and still completely invisible to HomeKit. Treating those as one thing is
+   * what lets the failure go unnoticed.
+   */
+  public Optional<String> advertisementFailure() {
+    return mdnsWatchdog == null ? Optional.empty() : mdnsWatchdog.deadReason();
+  }
+
+  /**
+   * Called once if the HomeKit advertisement dies.
+   *
+   * <p>The bridge keeps serving either way, so the dashboard can still show the reason; it
+   * is for the caller to decide what to do. Main exits non-zero so the service manager
+   * restarts a process that cannot recover on its own.
+   */
+  public void onAdvertisementFailure(Consumer<String> listener) {
+    this.advertisementFailureListener = listener == null ? reason -> {} : listener;
+  }
+
+  private void onAdvertisementDead(String reason) {
+    try {
+      advertisementFailureListener.accept(reason);
+    } catch (RuntimeException e) {
+      log.warn("the advertisement-failure listener failed: {}", e.getMessage());
+    }
   }
 }

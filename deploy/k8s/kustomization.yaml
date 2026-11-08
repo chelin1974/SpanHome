@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: span-home
+
+resources:
+  - base.yaml       # namespace, PVC, service
+  - deployment.yaml
+  # Needs an ingress controller. Remove this line if you do not run one - with
+  # hostNetwork the dashboard is already on the node's address.
+  - ingress.yaml
+
+commonLabels:
+  app.kubernetes.io/name: span-home
+  app.kubernetes.io/part-of: home-bridges
+
+images:
+  - name: ghcr.io/chelin1974/span-home
+    newTag: latest
+
+# The config Secret is deliberately NOT listed here: create it from a local file that is
+# never committed, with ./create-secret.sh. See README.md.
