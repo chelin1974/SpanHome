@@ -363,16 +363,26 @@ in a Docker volume, so it survives restarts and upgrades; containers come back o
 after a reboot once Docker Desktop starts. Prometheus listens on this machine only.
 
 **Grafana** (http://localhost:3000, sign in as admin / admin the first time) comes with
-Prometheus as its data source and the **SPAN Home** dashboard
-(`grafana/dashboards/span-home.json`) under **Dashboards**: house, panel, battery and grid
-right now; house and panel power over time; the circuits you pick, stacked; what's drawing now;
-the biggest energy users and kWh per day; today against the same time a week ago; battery
-charge and power, panel voltage and grid outages. Energy comes from each circuit's energy
-counter where the panel reports one, and otherwise from its watts.
-[DaikinHome](https://github.com/chelin1974/DaikinHome) has a **Daikin Home** dashboard for its
-thermostats; any dashboard JSON you put in `grafana/dashboards` is loaded the same way.
+Prometheus as its data source and two dashboards, under **Dashboards**:
 
-Pick panels or circuits at the top, and the time range at the top right.
+- **SPAN Home** (`grafana/dashboards/span-home.json`): house, panel, battery and grid right now;
+  house and panel power over time; the circuits you pick, stacked; what's drawing now; the
+  biggest energy users and kWh per day; today against the same time a week ago; battery charge
+  and power, panel voltage and grid outages. Energy comes from each circuit's energy counter
+  where the panel reports one, and otherwise from its watts.
+
+This stack is SpanHome's own: its own `prometheus.yml`, its own Grafana provisioning, and only
+its own dashboard. The DaikinHome and CellGateHome bridges each ship theirs in their own
+repository, so any one of the three runs with or without the others and each Grafana shows one
+bridge. The ports are allocated so all three can also run side by side:
+
+| Bridge | Prometheus | Grafana |
+| --- | --- | --- |
+| SpanHome | 9090 | 3000 |
+| DaikinHome | 9091 | 3001 |
+| CellGateHome | 9092 | 3002 |
+
+Pick panels, circuits or thermostats at the top of each, and the time range at the top right.
 Changes you save in Grafana last until this repo's copy of that dashboard changes; to keep one
 for good, export the dashboard's JSON over its file in `grafana/dashboards`.
 
@@ -432,7 +442,7 @@ changing it.
 | `showWattsInHome` | `true` | A "<circuit> Power" tile for each circuit, so Home shows its draw. |
 | `showPanelPower` | `true` | Per-panel and whole-house power sensors. |
 | `bridgeName` | `SPAN` | Shown while pairing. |
-| `port` | `51828` | HomeKit port. Different from DaikinHome's, so both can run on one machine. |
+| `port` | `51828` | HomeKit port. Different from the DaikinHome and CellGateHome bridges', so all three can run on one machine. |
 | `bindAddress` | chosen automatically | LAN IP to advertise on. Set it if the Home app can't find the bridge. |
 | `dashboardPort` | `8089` | Breaker Board dashboard port. `0` turns it off. |
 | `dashboardPasscode` | none | Household passcode for switching from the dashboard. Without it the dashboard is view-only. |
