@@ -304,12 +304,13 @@ docker compose up -d                       # Prometheus only
 docker compose --profile grafana up -d     # Prometheus and Grafana
 ```
 
-The ports are allocated so all three bridges can also run side by side on one host:
+CellGateHome's stack uses its own ports and can run alongside this one. DaikinHome's serves
+the same pair as this one, so run only one of those two and point both bridges at it:
 
 | Bridge | Prometheus | Grafana |
 | --- | --- | --- |
 | SpanHome | 9090 | 3000 |
-| DaikinHome | 9091 | 3001 |
+| DaikinHome | 9090 | 3000 |
 | CellGateHome | 9092 | 3002 |
 
 The bridge **pushes** OTLP metrics rather than being scraped, which is why Prometheus runs

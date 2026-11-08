@@ -15,12 +15,15 @@
 # the panels are unreachable. Run the bridge outside Docker on those, and use this file for
 # Prometheus and Grafana only.
 #
-# This stack shares nothing with the DaikinHome or CellGateHome bridges - separate config,
-# separate volumes, separate ports - so any one of them runs with or without the others:
+# This stack shares nothing with the DaikinHome or CellGateHome bridges - separate config and
+# separate volumes - so any one of them runs with or without the others:
 #
 #   SpanHome      Prometheus 9090   Grafana 3000
-#   DaikinHome    Prometheus 9091   Grafana 3001
+#   DaikinHome    Prometheus 9090   Grafana 3000
 #   CellGateHome  Prometheus 9092   Grafana 3002
+#
+# DaikinHome's stack serves the same ports as this one, so run only one of the two and point
+# both bridges at it. CellGateHome's has its own and can run alongside either.
 name: span-home
 
 services:

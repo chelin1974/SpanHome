@@ -419,12 +419,13 @@ Prometheus as its data source and two dashboards, under **Dashboards**:
 This stack is SpanHome's own: its own `prometheus.yml`, its own Grafana provisioning, and only
 its own dashboard. The DaikinHome and CellGateHome bridges each ship theirs in their own
 repository, so any one of the three runs with or without the others and each Grafana shows one
-bridge. The ports are allocated so all three can also run side by side:
+bridge. CellGateHome's stack uses its own ports and can run alongside this one; DaikinHome's
+serves the same pair as this one, so run only one of those two and point both bridges at it:
 
 | Bridge | Prometheus | Grafana |
 | --- | --- | --- |
 | SpanHome | 9090 | 3000 |
-| DaikinHome | 9091 | 3001 |
+| DaikinHome | 9090 | 3000 |
 | CellGateHome | 9092 | 3002 |
 
 Pick panels, circuits or thermostats at the top of each, and the time range at the top right.
