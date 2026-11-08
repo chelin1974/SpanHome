@@ -363,19 +363,16 @@ in a Docker volume, so it survives restarts and upgrades; containers come back o
 after a reboot once Docker Desktop starts. Prometheus listens on this machine only.
 
 **Grafana** (http://localhost:3000, sign in as admin / admin the first time) comes with
-Prometheus as its data source and two dashboards, under **Dashboards**:
+Prometheus as its data source and the **SPAN Home** dashboard
+(`grafana/dashboards/span-home.json`) under **Dashboards**: house, panel, battery and grid
+right now; house and panel power over time; the circuits you pick, stacked; what's drawing now;
+the biggest energy users and kWh per day; today against the same time a week ago; battery
+charge and power, panel voltage and grid outages. Energy comes from each circuit's energy
+counter where the panel reports one, and otherwise from its watts.
+[DaikinHome](https://github.com/chelin1974/DaikinHome) has a **Daikin Home** dashboard for its
+thermostats; any dashboard JSON you put in `grafana/dashboards` is loaded the same way.
 
-- **SPAN Home** (`grafana/dashboards/span-home.json`): house, panel, battery and grid right now;
-  house and panel power over time; the circuits you pick, stacked; what's drawing now; the
-  biggest energy users and kWh per day; today against the same time a week ago; battery charge
-  and power, panel voltage and grid outages. Energy comes from each circuit's energy counter
-  where the panel reports one, and otherwise from its watts.
-- **Daikin Home** (`grafana/dashboards/daikin-home.json`): the thermostats from
-  [DaikinHome](https://github.com/chelin1974/DaikinHome), when it sends to the same Prometheus:
-  temperatures against setpoints, humidity, what the equipment is doing, heating and cooling
-  hours, and the HVAC circuits' power from SPAN.
-
-Pick panels, circuits or thermostats at the top of each, and the time range at the top right.
+Pick panels or circuits at the top, and the time range at the top right.
 Changes you save in Grafana last until this repo's copy of that dashboard changes; to keep one
 for good, export the dashboard's JSON over its file in `grafana/dashboards`.
 
