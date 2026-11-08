@@ -1,6 +1,6 @@
 package io.github.chelin1974.spanhome.metrics;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import io.github.chelin1974.spanhome.web.DashboardModel;
 import java.net.InetAddress;
 import java.net.URI;

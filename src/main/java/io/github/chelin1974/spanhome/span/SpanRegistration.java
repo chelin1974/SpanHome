@@ -1,7 +1,8 @@
 package io.github.chelin1974.spanhome.span;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -76,8 +77,8 @@ public final class SpanRegistration {
     }
 
     JsonNode json = parse(response.body());
-    String password = json.path("ebusBrokerPassword").asText(null);
-    String serial = json.path("serialNumber").asText(null);
+    String password = json.path("ebusBrokerPassword").asString(null);
+    String serial = json.path("serialNumber").asString(null);
     if (password == null || password.isBlank() || serial == null || serial.isBlank()) {
       throw new RegistrationException(
           "the panel registered this bridge but returned no broker password. Try again with the"
@@ -88,7 +89,7 @@ public final class SpanRegistration {
     panel.serial = serial;
     panel.host = host;
     panel.mqttsPort = json.path("ebusBrokerMqttsPort").asInt(8883);
-    panel.brokerUsername = json.path("ebusBrokerUsername").asText(serial);
+    panel.brokerUsername = json.path("ebusBrokerUsername").asString(serial);
     panel.brokerPassword = password;
     panel.caCertificate = ca;
     panel.clientName = clientName;
@@ -143,7 +144,7 @@ public final class SpanRegistration {
   }
 
   static String describeFailure(HttpResponse<String> response, boolean usedPassphrase) {
-    String detail = parse(response.body()).path("detail").asText("");
+    String detail = parse(response.body()).path("detail").asString("");
     int status = response.statusCode();
     String suffix = detail.isBlank() ? "" : ": " + detail;
     if (status == 401 || status == 403) {
@@ -172,7 +173,7 @@ public final class SpanRegistration {
           .header("Content-Type", "application/json")
           .POST(HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body)))
           .build();
-    } catch (IOException e) {
+    } catch (JacksonException e) {
       throw new RegistrationException("could not build the registration request", e);
     }
   }

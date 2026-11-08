@@ -9,8 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import io.github.chelin1974.spanhome.homekit.CircuitOutlet;
 import io.github.chelin1974.spanhome.metrics.OtlpExporter;
@@ -118,22 +118,22 @@ class MetricsAndDashboardTest {
     JsonNode json = MAPPER.valueToTree(OtlpMetrics.request(OtlpMetrics.collect(model), 2_000_000_000L, 1_000_000_000L,
         Map.of("service.name", "span-home"), "1.0.0"));
     JsonNode rm = json.path("resourceMetrics").get(0);
-    assertEquals("service.name", rm.path("resource").path("attributes").get(0).path("key").asText());
+    assertEquals("service.name", rm.path("resource").path("attributes").get(0).path("key").asString());
     JsonNode metrics = rm.path("scopeMetrics").get(0).path("metrics");
 
     JsonNode power = null, energy = null;
     for (JsonNode m : metrics) {
-      if (m.path("name").asText().equals("span.circuit.power")) power = m;
-      if (m.path("name").asText().equals("span.circuit.energy")) energy = m;
+      if (m.path("name").asString().equals("span.circuit.power")) power = m;
+      if (m.path("name").asString().equals("span.circuit.energy")) energy = m;
     }
     assertEquals(3, power.path("gauge").path("dataPoints").size(), "one point per circuit");
     JsonNode dp = power.path("gauge").path("dataPoints").get(0);
-    assertTrue(dp.path("timeUnixNano").isTextual(), "64-bit times go out as strings");
-    assertEquals("2000000000", dp.path("timeUnixNano").asText());
+    assertTrue(dp.path("timeUnixNano").isString(), "64-bit times go out as strings");
+    assertEquals("2000000000", dp.path("timeUnixNano").asString());
     assertTrue(dp.path("asDouble").isNumber());
     assertEquals(2, energy.path("sum").path("aggregationTemporality").asInt());
     assertTrue(energy.path("sum").path("isMonotonic").asBoolean());
-    assertEquals("1000000000", energy.path("sum").path("dataPoints").get(0).path("startTimeUnixNano").asText());
+    assertEquals("1000000000", energy.path("sum").path("dataPoints").get(0).path("startTimeUnixNano").asString());
   }
 
   @Test
@@ -257,15 +257,15 @@ class MetricsAndDashboardTest {
       assertTrue(state.path("switching").asBoolean());
       assertEquals(1452.6, state.path("houseWatts").asDouble(), 1e-9);
       JsonNode panel = state.path("panels").get(0);
-      assertEquals("Main", panel.path("label").asText());
+      assertEquals("Main", panel.path("label").asString());
       assertEquals(88, panel.path("battery").path("percent").asInt());
-      assertEquals("charging", panel.path("battery").path("flow").asText());
+      assertEquals("charging", panel.path("battery").path("flow").asString());
 
       JsonNode hotTub = null, pv = null, fridge = null;
       for (JsonNode c : panel.path("circuits")) {
-        if (c.path("id").asText().equals(HOT_TUB)) hotTub = c;
-        if (c.path("id").asText().equals(PanelFixture.PV)) pv = c;
-        if (c.path("id").asText().equals(FRIDGE)) fridge = c;
+        if (c.path("id").asString().equals(HOT_TUB)) hotTub = c;
+        if (c.path("id").asString().equals(PanelFixture.PV)) pv = c;
+        if (c.path("id").asString().equals(FRIDGE)) fridge = c;
       }
       assertEquals(1450.5, hotTub.path("watts").asDouble(), 1e-9);
       assertEquals(List.of(17, 19), MAPPER.convertValue(hotTub.path("spaces"), List.class));
@@ -333,7 +333,7 @@ class MetricsAndDashboardTest {
     try (DashboardServer s = server(null)) {
       JsonNode h = MAPPER.readTree(get(s, "/api/history").body());
       assertFalse(h.path("available").asBoolean());
-      assertTrue(h.path("reason").asText().contains("Prometheus"));
+      assertTrue(h.path("reason").asString().contains("Prometheus"));
     }
   }
 

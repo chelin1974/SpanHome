@@ -1,8 +1,10 @@
 package io.github.chelin1974.spanhome.span;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -26,7 +28,7 @@ import java.util.TreeMap;
 public final class PanelCredentials {
 
   private static final ObjectMapper MAPPER =
-      new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+      JsonMapper.builder().enable(SerializationFeature.INDENT_OUTPUT).build();
 
   /** One panel's entry. */
   @JsonIgnoreProperties(ignoreUnknown = true)
@@ -68,6 +70,8 @@ public final class PanelCredentials {
       return new PanelCredentials(file, new LinkedHashMap<>(shape.panels));
     } catch (IOException e) {
       throw new UncheckedIOException("could not read " + file.toAbsolutePath(), e);
+    } catch (JacksonException e) {
+      throw new UncheckedIOException("could not read " + file.toAbsolutePath(), new IOException(e.getMessage(), e));
     }
   }
 
@@ -119,6 +123,8 @@ public final class PanelCredentials {
       Files.move(temp, absolute, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     } catch (IOException e) {
       throw new UncheckedIOException("could not write " + file.toAbsolutePath(), e);
+    } catch (JacksonException e) {
+      throw new UncheckedIOException("could not write " + file.toAbsolutePath(), new IOException(e.getMessage(), e));
     }
   }
 }

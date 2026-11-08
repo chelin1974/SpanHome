@@ -1,7 +1,7 @@
 package io.github.chelin1974.spanhome.span;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -129,14 +129,14 @@ public final class HomieTree {
 
     List<String> children = new ArrayList<>();
     root.path("children").forEach(child -> {
-      if (child.isTextual() && !child.asText().isBlank()) {
-        children.add(child.asText());
+      if (child.isString() && !child.asString().isBlank()) {
+        children.add(child.asString());
       }
     });
 
     Set<String> settable = new HashSet<>();
-    root.path("nodes").fields().forEachRemaining(node ->
-        node.getValue().path("properties").fields().forEachRemaining(property -> {
+    root.path("nodes").properties().forEach(node ->
+        node.getValue().path("properties").properties().forEach(property -> {
           if (property.getValue().path("settable").asBoolean(false)) {
             settable.add(node.getKey() + "/" + property.getKey());
           }
@@ -145,9 +145,9 @@ public final class HomieTree {
     return Optional.of(
         new Device(
             deviceId,
-            root.path("type").asText(""),
-            root.path("name").asText(""),
-            root.path("parent").asText(null),
+            root.path("type").asString(""),
+            root.path("name").asString(""),
+            root.path("parent").asString(null),
             List.copyOf(children),
             Set.copyOf(settable)));
   }
