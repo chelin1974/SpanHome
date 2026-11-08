@@ -370,10 +370,17 @@ Prometheus as its data source and two dashboards, under **Dashboards**:
   biggest energy users and kWh per day; today against the same time a week ago; battery charge
   and power, panel voltage and grid outages. Energy comes from each circuit's energy counter
   where the panel reports one, and otherwise from its watts.
-- **Daikin Home** (`grafana/dashboards/daikin-home.json`): the thermostats from
-  [DaikinHome](https://github.com/chelin1974/DaikinHome), when it sends to the same Prometheus:
-  temperatures against setpoints, humidity, what the equipment is doing, heating and cooling
-  hours, and the HVAC circuits' power from SPAN.
+
+This stack is SpanHome's own: its own `prometheus.yml`, its own Grafana provisioning, and only
+its own dashboard. The DaikinHome and CellGateHome bridges each ship theirs in their own
+repository, so any one of the three runs with or without the others and each Grafana shows one
+bridge. The ports are allocated so all three can also run side by side:
+
+| Bridge | Prometheus | Grafana |
+| --- | --- | --- |
+| SpanHome | 9090 | 3000 |
+| DaikinHome | 9091 | 3001 |
+| CellGateHome | 9092 | 3002 |
 
 Pick panels, circuits or thermostats at the top of each, and the time range at the top right.
 Changes you save in Grafana last until this repo's copy of that dashboard changes; to keep one
@@ -435,7 +442,7 @@ changing it.
 | `showWattsInHome` | `true` | A "<circuit> Power" tile for each circuit, so Home shows its draw. |
 | `showPanelPower` | `true` | Per-panel and whole-house power sensors. |
 | `bridgeName` | `SPAN` | Shown while pairing. |
-| `port` | `51828` | HomeKit port. Different from DaikinHome's, so both can run on one machine. |
+| `port` | `51828` | HomeKit port. Different from the DaikinHome and CellGateHome bridges', so all three can run on one machine. |
 | `bindAddress` | chosen automatically | LAN IP to advertise on. Set it if the Home app can't find the bridge. |
 | `dashboardPort` | `8089` | Breaker Board dashboard port. `0` turns it off. |
 | `dashboardPasscode` | none | Household passcode for switching from the dashboard. Without it the dashboard is view-only. |
