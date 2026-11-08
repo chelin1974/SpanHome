@@ -74,9 +74,11 @@ commissioned solar and battery circuits, for instance) are always read-only.
 - **SPAN firmware with SPAN API.** Built against `spanos3/r202633` (the parent/child data
   model). The SPAN API beta started on the MAIN 32. `--list` prints each panel's model and
   firmware.
-- **Java 21 or newer** to run the bridge: `brew install openjdk@21` on a Mac,
-  `sudo apt install openjdk-21-jre-headless` on Debian or Ubuntu. Maven to build
-  (`brew install maven`, `sudo apt install maven`), or Docker instead.
+- **Java 27** to run the bridge: `brew install openjdk@27` on a Mac,
+  `sudo apt install openjdk-27-jre-headless` on Debian or Ubuntu. Maven to build
+  (`brew install maven`, `sudo apt install maven`), or Docker instead. The build targets 27,
+  so an older JDK will not compile it; note that 27 is a six-month release rather than an
+  LTS, superseded by 28 in March 2027.
 - **Docker** (optional) for Prometheus, Grafana and the build. The bridge itself runs outside
   Docker: on a Mac, Docker Desktop's VM doesn't pass the Bonjour traffic HomeKit and the
   panels' `.local` names depend on.
@@ -235,10 +237,10 @@ running: in Docker Desktop, **Settings → General → Start Docker Desktop when
 On Linux the bridge runs as a systemd service under its own user, from `/opt/span-home`.
 `span-home.service` in this repo is the unit file.
 
-**1. Install Java** (21 or newer), e.g. on Debian or Ubuntu:
+**1. Install Java 27**, e.g. on Debian or Ubuntu:
 
 ```bash
-sudo apt install openjdk-21-jre-headless
+sudo apt install openjdk-27-jre-headless
 ```
 
 **2. Create a user and a folder for it, and copy in the jar, your config and the panel
