@@ -312,9 +312,54 @@ Prometheus and Grafana, and `deploy/k8s/` holds Kubernetes manifests. Images are
 `ghcr.io/chelin1974/span-home` by `.github/workflows/image.yml` for amd64 and arm64.
 
 ```bash
+mkdir -p data                               # config, credentials and pairing state together
 docker compose --profile bridge up -d       # the bridge in a container
 kubectl apply -k deploy/k8s                 # then the Secret - see deploy/k8s/README.md
 ```
+
+### The pairing state is shared with the host
+
+`docker-compose.yml` bind-mounts `./data` at `/data`. Everything the bridge writes - pairing
+state, the panel credentials earned at registration, accessory IDs, the layout number - is
+resolved relative to the config file, so the config lives in `./data` alongside them, and all
+of it is ordinary files you can see, back up and reuse.
+
+That means a container and a run outside Docker can share one pairing, but only if both use
+the same directory. **If you paired outside Docker and the container asks you to pair again**,
+the two are reading different files - move yours in:
+
+```bash
+mkdir -p data
+mv span-home.config.json span-home.credentials.json span-home.state.json data/
+mv span-home.accessories.json span-home.layout.json data/   # if they exist
+```
+
+and point the native run at the same copy from then on:
+
+```bash
+java -jar target/span-home.jar --config ./data/span-home.config.json
+```
+
+Only ever run **one** of them at a time. Two bridges sharing these files both advertise the
+same HomeKit identity and both write the same state, which shows up as accessories flapping
+to "No Response" - and is why the bridge sits behind a `bridge` compose profile rather than
+starting with `docker compose up`.
+
+Register with the panels before the first containerised start, since `--register` needs three
+door-switch presses or the app passphrase and cannot be done from inside a pod:
+
+```bash
+java -jar target/span-home.jar --config ./data/span-home.config.json --register
+```
+
+On a Linux host the container runs as UID 10001 and `./data` has to be writable by it, or the
+bridge reports `Permission denied` on that path:
+
+```bash
+mkdir -p data && sudo chown 10001:10001 data
+```
+
+Docker Desktop on a Mac maps ownership for you, so this is not needed there.
 
 **This bridge needs the local network for two reasons, and a container on a bridge or overlay
 network has neither.** HomeKit discovery is mDNS multicast to `224.0.0.251:5353` on the local
