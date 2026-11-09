@@ -50,6 +50,7 @@ class MirroredSourcesTest {
     Map<String, String> files = new LinkedHashMap<>();
     files.put("AccessoryIds", "src/main/java/io/github/chelin1974/spanhome/homekit/AccessoryIds.java");
     files.put("FileAuthInfo", "src/main/java/io/github/chelin1974/spanhome/homekit/FileAuthInfo.java");
+    files.put("HomeKitNames", "src/main/java/io/github/chelin1974/spanhome/homekit/HomeKitNames.java");
     files.put("LayoutVersion", "src/main/java/io/github/chelin1974/spanhome/homekit/LayoutVersion.java");
     files.put("MdnsWatchdog", "src/main/java/io/github/chelin1974/spanhome/homekit/MdnsWatchdog.java");
     files.put("NetworkAddresses", "src/main/java/io/github/chelin1974/spanhome/homekit/NetworkAddresses.java");
