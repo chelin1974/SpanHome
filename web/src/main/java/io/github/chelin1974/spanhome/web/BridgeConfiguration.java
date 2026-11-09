@@ -61,6 +61,14 @@ public class BridgeConfiguration {
     SpanHomeConfig config = SpanHomeConfig.load(file);
     log.info("configuration read from {}", file.toAbsolutePath());
 
+    // A deployment can force where the written files go without editing the user's config.
+    // The container uses this so the pairing state cannot land anywhere but the volume.
+    String override = properties.getDataDirectory();
+    if (override != null && !override.isBlank()) {
+      config.dataDirectory = override.strip();
+      log.info("writing to {} (from span.data-directory)", config.dataDirectory().toAbsolutePath());
+    }
+
     return config;
   }
 

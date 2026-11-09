@@ -5,6 +5,10 @@ span:
   # at registration, accessory IDs, the layout number - is resolved relative to this file, so
   # keeping it with them means one directory to mount and one directory to back up.
   config-file: ${SPAN_CONFIG_FILE:}
+  # Overrides "dataDirectory" in the config file, so a deployment can put every written file -
+  # pairing state, panel credentials, accessory IDs, the layout number - somewhere specific
+  # without editing the user's config. The container sets this to /data, the mounted volume.
+  data-directory: ${SPAN_DATA_DIRECTORY:}
 
 server:
   # The same port the Breaker Board dashboard has always been on. The bridge's own small HTTP

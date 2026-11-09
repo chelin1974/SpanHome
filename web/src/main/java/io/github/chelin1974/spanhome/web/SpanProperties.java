@@ -25,6 +25,23 @@ public class SpanProperties {
    */
   private String configFile;
 
+  /**
+   * Overrides {@code dataDirectory} in the configuration file.
+   *
+   * <p>For a deployment that must put the written files somewhere specific without editing the
+   * user's config - a container pointing them at its mounted volume, say. Left unset, the
+   * config file decides, and unset there it is the config file's own directory.
+   */
+  private String dataDirectory;
+
+  public String getDataDirectory() {
+    return dataDirectory;
+  }
+
+  public void setDataDirectory(String dataDirectory) {
+    this.dataDirectory = dataDirectory;
+  }
+
   public String getConfigFile() {
     return configFile;
   }
