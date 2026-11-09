@@ -201,10 +201,26 @@ class ConfigAndStorageTest {
     assertEquals("Lights 2", HomeKitNames.unique("Lights", List.of("lights")));
   }
 
+  /**
+   * Pins what the javadoc on {@code firmware} claims, which was its only specification. The
+   * two bridges sharing this class described it with different examples - both correct, at
+   * different levels of generality - so both shapes are covered here.
+   */
   @Test
-  @DisplayName("SPAN firmware strings become HomeKit x.y.z versions")
+  @DisplayName("firmware strings become HomeKit x.y.z versions")
   void firmware() {
+    // The first three runs of digits, each read as a number so leading zeros go.
     assertEquals("3.202633.4", HomeKitNames.firmware("spanos3/r202633/04"));
+    assertEquals("2.4.17", HomeKitNames.firmware("v2.4.17-b3"));
+    assertEquals("1.2.3", HomeKitNames.firmware("1.2.3"));
+
+    // Fewer than three runs pads with zeros.
+    assertEquals("2.4.0", HomeKitNames.firmware("2.4"));
+    assertEquals("7.0.0", HomeKitNames.firmware("7"));
+
+    // Nothing usable falls back.
     assertEquals("1.0.0", HomeKitNames.firmware(null));
+    assertEquals("1.0.0", HomeKitNames.firmware(""));
+    assertEquals("1.0.0", HomeKitNames.firmware("no digits here"));
   }
 }
