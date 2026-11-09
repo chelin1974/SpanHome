@@ -75,6 +75,8 @@ public final class SpanHomeBridge implements AutoCloseable {
   private final List<DashboardModel.PanelSource> dashboardPanels = new ArrayList<>();
   private OtlpExporter exporter;
   private DashboardServer dashboard;
+  private volatile DashboardModel model;
+  private boolean dashboardServedElsewhere;
 
   static final String VERSION = "1.0.0";
 
@@ -191,7 +193,7 @@ public final class SpanHomeBridge implements AutoCloseable {
 
   /** The Breaker Board page and the OTLP export. Neither can stop HomeKit from running. */
   private void startDashboardAndMetrics(InetAddress address) {
-    DashboardModel model = new DashboardModel(dashboardPanels, config::roomOf);
+    model = new DashboardModel(dashboardPanels, config::roomOf);
 
     config.otlpUri().ifPresentOrElse(
         uri -> {
@@ -200,7 +202,7 @@ public final class SpanHomeBridge implements AutoCloseable {
         },
         () -> log.info("metrics export is off; set \"prometheusUrl\" to record history"));
 
-    if (config.dashboardPort <= 0) {
+    if (dashboardServedElsewhere || config.dashboardPort <= 0) {
       return;
     }
     PrometheusHistory history = config.prometheusUri().map(PrometheusHistory::new).orElse(null);
@@ -415,6 +417,30 @@ public final class SpanHomeBridge implements AutoCloseable {
    */
   public Optional<String> advertisementFailure() {
     return mdnsWatchdog == null ? Optional.empty() : mdnsWatchdog.deadReason();
+  }
+
+  /**
+   * Stops the bridge starting its own HTTP server for the dashboard.
+   *
+   * <p>For the Spring Boot flavour, which serves the same page and the same routes through
+   * Tomcat. Only one of the two may bind the dashboard port, and Spring is already listening on
+   * it by the time the bridge starts, so this is how the bridge stands down. Must be called
+   * before {@link #start()}.
+   */
+  public void dashboardServedElsewhere() {
+    this.dashboardServedElsewhere = true;
+  }
+
+  /**
+   * What the Breaker Board page reads, once the panels have been discovered.
+   *
+   * <p>Empty until {@link #start()} has built it. The CLI flavour never needs this - the
+   * bridge serves the page itself on {@code dashboardPort} - but the Spring Boot flavour
+   * serves the same data through its own controllers, with {@code dashboardPort} set to 0 so
+   * only one of the two binds a port.
+   */
+  public Optional<DashboardModel> model() {
+    return Optional.ofNullable(model);
   }
 
   /**

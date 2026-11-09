@@ -40,6 +40,11 @@ services:
     # host's own port 8089, so there is no `ports:` mapping here.
     network_mode: host
 
+    environment:
+      # The Spring Boot flavour reads the same span-home.config.json the CLI reads; this points
+      # it at the copy on the mounted data directory rather than one beside the jar.
+      SPAN_CONFIG_FILE: /data/span-home.config.json
+
     volumes:
       # Everything the bridge writes - pairing state, the panel credentials earned at
       # registration, accessory IDs, the layout number - is resolved relative to the
@@ -49,6 +54,14 @@ services:
       # first so ./data/span-home.credentials.json exists:
       #     java -jar target/span-home.jar --config ./data/span-home.config.json --register
       - ./data:/data
+
+    # Tomcat refuses to start without a writable temp dir, and on the container's writable
+    # layer that is a disk write - so a full Docker disk stops the bridge booting at all, with
+    # a stack trace that points at Tomcat rather than at the disk. In RAM it cannot be filled
+    # by anything else, and nothing here needs to survive a restart: the pairing state is on
+    # the data mount above.
+    tmpfs:
+      - /tmp:size=64m
 
     healthcheck:
       # /healthz turns 503 once the mDNS responder has died, which is the failure that

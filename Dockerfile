@@ -5,7 +5,9 @@ FROM maven:3.10-eclipse-temurin-27 AS build
 WORKDIR /src
 
 COPY pom.xml ./
-COPY src src
+COPY core core
+COPY cli cli
+COPY web web
 
 # A BuildKit cache mount keeps the Maven repository between builds, which is both
 # simpler and more reliable than a separate dependency-resolution layer.
@@ -24,7 +26,10 @@ RUN useradd --system --uid 10001 --create-home --home-dir /app --shell /usr/sbin
  && chown span:span /data
 
 WORKDIR /app
-COPY --from=build --chown=span:span /src/target/span-home.jar ./span-home.jar
+# The Spring Boot flavour: the Breaker Board dashboard on Tomcat, a REST API and actuator
+# health with liveness and readiness groups. The plain jar (cli/target/span-home.jar) is what
+# launchd and systemd run outside a container; in one, the health endpoints earn their keep.
+COPY --from=build --chown=span:span /src/web/target/span-home-web.jar ./span-home-web.jar
 
 USER 10001
 
@@ -49,5 +54,9 @@ VOLUME ["/data"]
 EXPOSE 8089/tcp 51828/tcp
 
 # No shell, so the JVM is PID 1 and gets SIGTERM directly.
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=70", "-jar", "/app/span-home.jar"]
-CMD ["--config", "/data/span-home.config.json"]
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=70", "-jar", "/app/span-home-web.jar"]
+# Where the config is in this image. The CLI took "--config <path>"; the Spring Boot flavour
+# takes a property, and would have parsed that flag as an unknown option and ignored it -
+# leaving the bridge looking for a config beside the jar. An ENV rather than a CMD so compose
+# and Kubernetes inherit it without each having to pass it.
+ENV SPAN_CONFIG_FILE=/data/span-home.config.json
