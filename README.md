@@ -113,7 +113,9 @@ both write the same pairing state.
 **2. Configure.** Copy the example and set your panel serials (shown in the SPAN Home app):
 
 ```bash
-cp span-home.config.example.json span-home.config.json
+# -n never overwrites an existing config, so re-running this cannot replace real settings
+# with the example's placeholders.
+cp -n span-home.config.example.json span-home.config.json
 ```
 
 Each panel is reached at `span-<serial>.local`. If `.local` names don't resolve on your
