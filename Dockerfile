@@ -55,4 +55,8 @@ EXPOSE 8089/tcp 51828/tcp
 
 # No shell, so the JVM is PID 1 and gets SIGTERM directly.
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=70", "-jar", "/app/span-home-web.jar"]
-CMD ["--config", "/data/span-home.config.json"]
+# Where the config is in this image. The CLI took "--config <path>"; the Spring Boot flavour
+# takes a property, and would have parsed that flag as an unknown option and ignored it -
+# leaving the bridge looking for a config beside the jar. An ENV rather than a CMD so compose
+# and Kubernetes inherit it without each having to pass it.
+ENV SPAN_CONFIG_FILE=/data/span-home.config.json

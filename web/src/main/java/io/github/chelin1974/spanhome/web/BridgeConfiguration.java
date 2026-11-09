@@ -61,20 +61,21 @@ public class BridgeConfiguration {
     SpanHomeConfig config = SpanHomeConfig.load(file);
     log.info("configuration read from {}", file.toAbsolutePath());
 
-    // Only one of the two may bind the dashboard port. Spring is already listening on it by
-    // the time the bridge starts - application.yml takes server.port from this same setting -
-    // so the bridge's own small HTTP server stands down.
-    if (config.dashboardPort != null && config.dashboardPort > 0) {
-      log.info("the Breaker Board dashboard is served by this service on port {}",
-          config.dashboardPort);
-      config.dashboardPort = 0;
-    }
     return config;
   }
 
   @Bean
   SpanHomeBridge spanHomeBridge(SpanHomeConfig config) {
-    return new SpanHomeBridge(config);
+    SpanHomeBridge bridge = new SpanHomeBridge(config);
+
+    // Only one of the two may bind the dashboard port. Spring is already listening on it by the
+    // time the bridge starts - application.yml takes server.port from the same setting - so the
+    // bridge's own small HTTP server stands down. A flag on the bridge rather than a config
+    // value overwritten underneath it, matching CellGateHome, whose config is immutable.
+    bridge.dashboardServedElsewhere();
+    log.info("the Breaker Board dashboard is served by this service on port {}",
+        config.dashboardPort);
+    return bridge;
   }
 
   @Bean
