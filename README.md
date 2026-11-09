@@ -99,7 +99,16 @@ Or, without Maven installed, in Docker:
 docker compose run --rm build
 ```
 
-Either way you get `target/span-home.jar`.
+Either way you get two jars:
+
+| Jar | What it is |
+| --- | --- |
+| `cli/target/span-home.jar` (~9 MB) | the plain runnable jar: HomeKit, the Breaker Board dashboard on its own small HTTP server, no Spring. This is what launchd and systemd run. |
+| `web/target/span-home-web.jar` (~29 MB) | the same bridge inside Spring Boot: the dashboard served by Tomcat, a REST API, and actuator health with liveness and readiness groups. This is what the container runs. |
+
+Both read the same `span-home.config.json` and write the same files, so you can swap between
+them - but run only one at a time, since they would both advertise the same HomeKit bridge and
+both write the same pairing state.
 
 **2. Configure.** Copy the example and set your panel serials (shown in the SPAN Home app):
 
@@ -115,7 +124,7 @@ re-issues its TLS certificate whenever its IP changes.
 the broker credentials to `span-home.credentials.json` (owner-only).
 
 ```bash
-java -jar target/span-home.jar --register
+java -jar cli/target/span-home.jar --register
 ```
 
 For each panel, it waits while you **open the panel door and press the door switch twice
@@ -123,7 +132,7 @@ more** (opening it counts as the first press); the breaker LEDs flash to confirm
 door with the passphrase from the SPAN Home app; you'll be prompted for it:
 
 ```bash
-java -jar target/span-home.jar --register --passphrase
+java -jar cli/target/span-home.jar --register --passphrase
 ```
 
 Use `--panel <serial>` to register just one.
@@ -131,7 +140,7 @@ Use `--panel <serial>` to register just one.
 **4. Look before you switch anything on.**
 
 ```bash
-java -jar target/span-home.jar --list
+java -jar cli/target/span-home.jar --list
 ```
 
 ```
@@ -148,7 +157,7 @@ Use the names exactly as listed in `readOnlyCircuits`, `switchCircuits`, `hidden
 **5. Start it and pair.**
 
 ```bash
-java -jar target/span-home.jar
+java -jar cli/target/span-home.jar
 ```
 
 It runs in that terminal until you press **Ctrl+C**. The log prints the address the bridge is
@@ -190,7 +199,7 @@ cat > ~/Library/LaunchAgents/io.github.chelin1974.spanhome.plist <<EOF
   <array>
     <string>$JAVA</string>
     <string>-jar</string>
-    <string>$DIR/target/span-home.jar</string>
+    <string>$DIR/cli/target/span-home.jar</string>
     <string>--config</string>
     <string>$DIR/span-home.config.json</string>
   </array>
@@ -251,7 +260,7 @@ don't have to pair again and your rooms and automations are kept.
 ```bash
 sudo useradd --system --home-dir /opt/span-home --shell /usr/sbin/nologin span-home
 sudo mkdir -p /opt/span-home
-sudo cp target/span-home.jar span-home.config.json span-home.credentials.json /opt/span-home/
+sudo cp cli/target/span-home.jar span-home.config.json span-home.credentials.json /opt/span-home/
 sudo cp span-home.state.json span-home.accessories.json /opt/span-home/ 2>/dev/null || true
 sudo chown -R span-home: /opt/span-home
 sudo chmod 700 /opt/span-home
@@ -301,7 +310,7 @@ Then restart it: on a Mac, `launchctl kickstart -k gui/$(id -u)/io.github.chelin
 on Linux, copy the new jar over and restart:
 
 ```bash
-sudo cp target/span-home.jar /opt/span-home/
+sudo cp cli/target/span-home.jar /opt/span-home/
 sudo systemctl restart span-home
 ```
 
@@ -337,7 +346,7 @@ mv span-home.accessories.json span-home.layout.json data/   # if they exist
 and point the native run at the same copy from then on:
 
 ```bash
-java -jar target/span-home.jar --config ./data/span-home.config.json
+java -jar cli/target/span-home.jar --config ./data/span-home.config.json
 ```
 
 Only ever run **one** of them at a time. Two bridges sharing these files both advertise the
@@ -349,7 +358,7 @@ Register with the panels before the first containerised start, since `--register
 door-switch presses or the app passphrase and cannot be done from inside a pod:
 
 ```bash
-java -jar target/span-home.jar --config ./data/span-home.config.json --register
+java -jar cli/target/span-home.jar --config ./data/span-home.config.json --register
 ```
 
 On a Linux host the container runs as UID 10001 and `./data` has to be writable by it, or the

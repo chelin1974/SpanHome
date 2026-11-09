@@ -118,7 +118,13 @@ spec:
 
           # Reads the copy the init container placed on the volume, so the files it writes
           # land beside it rather than on the container's ephemeral filesystem.
-          args: ["--config", "/data/span-home.config.json"]
+          #
+          # The image runs the Spring Boot flavour, which takes this as a property rather than
+          # the CLI's "--config" flag - that flag would be parsed as an unknown option and
+          # silently ignored, leaving the bridge looking for a config file beside the jar.
+          env:
+            - name: SPAN_CONFIG_FILE
+              value: /data/span-home.config.json
 
           ports:
             - name: dashboard

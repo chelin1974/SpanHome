@@ -260,7 +260,6 @@ public final class DashboardServer implements AutoCloseable {
     }
   }
 
-  /** Private IPv4, IPv6 unique-local, link-local and loopback. */
   /**
    * Liveness, for a supervisor rather than a person.
    *
@@ -279,7 +278,14 @@ public final class DashboardServer implements AutoCloseable {
     }
   }
 
-  static boolean isLocal(InetAddress address) {
+  /**
+   * True for a loopback, link-local, private IPv4 or IPv6 unique-local address.
+   *
+   * <p>Public because the Spring Boot flavour's request filter uses this same check rather
+   * than reimplementing it: the two front ends must agree on what counts as the home network,
+   * and a second copy of this is a second thing to get wrong.
+   */
+  public static boolean isLocal(InetAddress address) {
     if (address == null) {
       return false;
     }
