@@ -44,6 +44,10 @@ services:
       # The Spring Boot flavour reads the same span-home.config.json the CLI reads; this points
       # it at the copy on the mounted data directory rather than one beside the jar.
       SPAN_CONFIG_FILE: /data/span-home.config.json
+      # Every file the bridge writes goes here, on the mount below. The config already sits in
+      # /data so this is where they would land anyway - set explicitly so it is a declared fact
+      # rather than a consequence of where the config happens to be.
+      SPAN_DATA_DIRECTORY: /data
 
     volumes:
       # Everything the bridge writes - pairing state, the panel credentials earned at

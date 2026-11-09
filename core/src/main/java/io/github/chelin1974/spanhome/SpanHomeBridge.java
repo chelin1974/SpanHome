@@ -118,6 +118,7 @@ public final class SpanHomeBridge implements AutoCloseable {
   }
 
   public void start() throws Exception {
+    logWrittenPaths();
     connections.addAll(connectAll(config));
 
     FileAuthInfo authInfo = FileAuthInfo.loadOrCreate(config.statePath());
@@ -189,6 +190,20 @@ public final class SpanHomeBridge implements AutoCloseable {
     }
 
     startDashboardAndMetrics(address);
+  }
+
+  /**
+   * Says where every file the bridge writes is going, once, at startup.
+   *
+   * <p>Four files land somewhere decided by a data directory, three optional per-file
+   * overrides and a default. That is enough moving parts that "where is my pairing state?"
+   * should be answerable by reading the log rather than by rereading the settings - and in a
+   * container, by checking these are on the mounted volume rather than the writable layer.
+   */
+  private void logWrittenPaths() {
+    log.info("writing to {}", config.dataDirectory().toAbsolutePath());
+    config.writtenPaths()
+        .forEach((what, where) -> log.info("  {}: {}", what, where.toAbsolutePath()));
   }
 
   /** The Breaker Board page and the OTLP export. Neither can stop HomeKit from running. */

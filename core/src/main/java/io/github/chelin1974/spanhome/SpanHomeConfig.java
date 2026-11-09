@@ -131,6 +131,20 @@ public final class SpanHomeConfig {
   public Integer port = DEFAULT_PORT;
   public String bindAddress;
 
+  /**
+   * Where everything the bridge writes goes: pairing state, panel credentials, accessory IDs,
+   * the layout number.
+   *
+   * <p>Relative to the configuration file's directory, or absolute. Left unset it *is* the
+   * configuration file's directory, which is what this bridge has always done - so nothing
+   * moves for an existing setup.
+   *
+   * <p>The point of naming it is that a container can put every written file on its mounted
+   * volume with one setting, instead of relying on the configuration file happening to sit in
+   * the right place. The DaikinHome and CellGateHome bridges take the same setting.
+   */
+  public String dataDirectory;
+
   /** HomeKit pairing state. Back it up; losing it un-pairs the bridge. */
   public String storagePath;
 
@@ -140,7 +154,7 @@ public final class SpanHomeConfig {
   /** Stable HomeKit IDs for each circuit. */
   public String accessoryIdsPath;
 
-  /** Where relative paths resolve: the config file's directory. */
+  /** What {@code dataDirectory} itself is relative to: the config file's own directory. */
   private Path baseDirectory = Path.of(".");
 
   public static SpanHomeConfig load(Path file) {
@@ -266,7 +280,33 @@ public final class SpanHomeConfig {
    * on how the bridge was started.
    */
   private Path resolve(String configured, String fallback) {
-    return baseDirectory.resolve(isBlank(configured) ? fallback : configured.trim());
+    return dataDirectory().resolve(isBlank(configured) ? fallback : configured.trim());
+  }
+
+  /**
+   * The directory every written file lands in.
+   *
+   * <p>{@code dataDirectory} when set, and the configuration file's own directory otherwise.
+   * An absolute {@code dataDirectory} is taken as given; {@link Path#resolve} returns it
+   * unchanged.
+   */
+  public Path dataDirectory() {
+    return isBlank(dataDirectory) ? baseDirectory : baseDirectory.resolve(dataDirectory.trim());
+  }
+
+  /**
+   * Every path the bridge will write to, for logging at startup.
+   *
+   * <p>Printed once when the bridge starts so that where these land is a fact you can read
+   * rather than infer from three settings and a default.
+   */
+  public java.util.Map<String, Path> writtenPaths() {
+    java.util.Map<String, Path> paths = new java.util.LinkedHashMap<>();
+    paths.put("pairing state", statePath());
+    paths.put("panel credentials", credentialsFile());
+    paths.put("accessory IDs", accessoryIdsFile());
+    paths.put("layout number", layoutFile());
+    return paths;
   }
 
   // ------------------------------------------------------------- matching
