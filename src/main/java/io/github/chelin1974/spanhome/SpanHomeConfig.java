@@ -255,6 +255,16 @@ public final class SpanHomeConfig {
     return resolve(null, "span-home.layout.json");
   }
 
+  /**
+   * A configured path, relative to the configuration file's own directory.
+   *
+   * <p>One rule, shared with the DaikinHome and CellGateHome bridges: absolute paths are taken
+   * as given ({@link Path#resolve} returns them unchanged), and a relative one is resolved
+   * against the configuration file's directory - never the process working directory, which is
+   * whatever launched the bridge and differs between a shell, a launchd job and a container.
+   * Losing track of the state file un-pairs every controller, so where it lands must not depend
+   * on how the bridge was started.
+   */
   private Path resolve(String configured, String fallback) {
     return baseDirectory.resolve(isBlank(configured) ? fallback : configured.trim());
   }
