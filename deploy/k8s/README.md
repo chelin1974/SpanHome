@@ -68,8 +68,8 @@ do it once on a machine on your LAN and keep the result.
 
 ```bash
 mvn package
-java -jar target/span-home.jar --register                  # then press the door switch
-java -jar target/span-home.jar --register --passphrase     # or use the app passphrase
+java -jar cli/target/span-home.jar --register                  # then press the door switch
+java -jar cli/target/span-home.jar --register --passphrase     # or use the app passphrase
 ```
 
 That writes `span-home.credentials.json` beside your config. Treat it like a password file:
@@ -192,7 +192,7 @@ depends on.
 ## The whole thing, in order
 
 ```bash
-java -jar target/span-home.jar --register       # once, on your LAN, outside the cluster
+java -jar cli/target/span-home.jar --register       # once, on your LAN, outside the cluster
 kubectl get nodes -o wide                       # find a node on your home LAN
 kubectl apply -f deploy/k8s/base.yaml
 kubectl label node <node-name> homekit=true

@@ -3,7 +3,7 @@
 #   docker compose up -d                      # Prometheus only, as before
 #   docker compose --profile grafana up -d    # Prometheus and Grafana
 #   docker compose --profile bridge up -d     # also run the bridge in a container
-#   docker compose run --rm build             # build target/span-home.jar, no local Maven needed
+#   docker compose run --rm build             # build the jars, no local Maven needed
 #
 # The bridge is behind a profile rather than on by default, on purpose: if you already run
 # it under systemd or launchd on this machine, starting a second copy would fight over
@@ -56,7 +56,7 @@ services:
       #
       # Put span-home.config.json in ./data before starting, and register with the panels
       # first so ./data/span-home.credentials.json exists:
-      #     java -jar target/span-home.jar --config ./data/span-home.config.json --register
+      #     java -jar cli/target/span-home.jar --config ./data/span-home.config.json --register
       - ./data:/data
 
     # Tomcat refuses to start without a writable temp dir, and on the container's writable
@@ -71,7 +71,13 @@ services:
       # /healthz turns 503 once the mDNS responder has died, which is the failure that
       # matters here: the dashboard keeps serving perfectly while nothing in Apple Home can
       # reach the bridge.
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8089 && printf 'GET /healthz HTTP/1.0\r\n\r\n' >&3 && head -1 <&3 | grep -q 200"]
+      #
+      # "CMD" with bash spelled out, not "CMD-SHELL": CMD-SHELL runs /bin/sh, which in the
+      # eclipse-temurin base is dash, and /dev/tcp is a bash feature. Under dash this failed
+      # with "cannot create /dev/tcp/...: Directory nonexistent" on every interval, so the
+      # container sat permanently "unhealthy" however well the bridge was running. The image
+      # carries no curl, wget or nc, so bash's own socket is the only probe available.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8089 && printf 'GET /healthz HTTP/1.0\r\n\r\n' >&3 && head -1 <&3 | grep -q 200"]
       interval: 30s
       timeout: 5s
       start_period: 120s
@@ -105,9 +111,14 @@ services:
       - grafana-data:/var/lib/grafana
     restart: unless-stopped
 
-  # Builds the bridge jar with Maven and a JDK from the image; the Maven cache lives in a volume.
+  # Builds the jars with Maven and a JDK from the image; the Maven cache lives in a volume.
+  # Leaves cli/target/span-home.jar (what launchd and systemd run) and
+  # web/target/span-home-web.jar (what the container above runs) behind.
+  #
+  # The JDK has to match the Dockerfile's build stage: the project compiles with
+  # maven.compiler.release=27, which a JDK 21 image refuses outright.
   build:
-    image: maven:3.9-eclipse-temurin-21
+    image: maven:3.10-eclipse-temurin-27
     profiles: ["build"]
     working_dir: /src
     command: mvn -q -B package

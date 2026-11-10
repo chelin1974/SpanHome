@@ -321,10 +321,21 @@ Prometheus and Grafana, and `deploy/k8s/` holds Kubernetes manifests. Images are
 `ghcr.io/chelin1974/span-home` by `.github/workflows/image.yml` for amd64 and arm64.
 
 ```bash
-mkdir -p data                               # config, credentials and pairing state together
-docker compose --profile bridge up -d       # the bridge in a container
-kubectl apply -k deploy/k8s                 # then the Secret - see deploy/k8s/README.md
+mkdir -p data                                                    # config, credentials and state together
+cp -n span-home.config.example.json data/span-home.config.json   # then edit it
+docker compose --profile bridge up -d                            # the bridge in a container
+kubectl apply -k deploy/k8s                                      # then the Secret - see deploy/k8s/README.md
 ```
+
+`--profile bridge` is not optional. Plain `docker compose up -d` starts Prometheus and nothing
+else, on purpose - see [the pairing state is shared with the host](#the-pairing-state-is-shared-with-the-host)
+for why. `docker compose config --services` lists what a given invocation would really start,
+which is the quickest way to tell the two apart.
+
+Register with your panels before that first containerised start. Without
+`data/span-home.credentials.json` the bridge still comes up and serves the dashboard, but logs
+`panel ... is not registered yet` and retries every 60 seconds forever - and `--register` wants
+three door-switch presses or the app passphrase, which cannot be done from inside a container.
 
 ### The pairing state is shared with the host
 
