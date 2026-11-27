@@ -1,20 +1,25 @@
 package io.github.chelin1974.spanhome.span;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import java.io.IOException;
-import java.net.URI;
+import io.github.chelin1974.spanhome.span.api.SpanPanelApi;
+import io.github.chelin1974.spanhome.span.api.model.AuthIn;
+import io.github.chelin1974.spanhome.span.api.model.AuthOut;
+import io.github.chelin1974.spanhome.span.api.model.ErrorOut;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import javax.net.ssl.SSLContext;
+import java.util.function.Supplier;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.client.support.RestClientAdapter;
+import org.springframework.web.service.invoker.HttpServiceProxyFactory;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Registers this bridge with a panel's SPAN API and returns the broker credentials.
@@ -30,19 +35,24 @@ import javax.net.ssl.SSLContext;
  * door switch three times first (opening the door counts as the first press). The door-press
  * proof is single-use: a failed registration consumes it, so this checks
  * {@code GET /api/v2/status} for {@code proximityProven} before spending it.
+ *
+ * <p>The status and register calls go through {@link SpanPanelApi}, generated at build time from
+ * SPAN's OpenAPI spec (see {@code core/src/main/openapi}). The CA download stays a plain request:
+ * it returns a PEM file, which the spec describes as binary, not JSON.
  */
 public final class SpanRegistration {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final Duration TIMEOUT = Duration.ofSeconds(20);
+  static final String CA_PATH = "/api/v2/certificate/ca";
 
   /** Raised with a message fit to show the user. */
   public static final class RegistrationException extends RuntimeException {
-    public RegistrationException(String message) {
+    public RegistrationException(final String message) {
       super(message);
     }
 
-    public RegistrationException(String message, Throwable cause) {
+    public RegistrationException(final String message, final Throwable cause) {
       super(message, cause);
     }
   }
@@ -54,43 +64,39 @@ public final class SpanRegistration {
    * @param passphrase the panel passphrase, or null to use the door-press proof
    * @param waitForDoor with no passphrase, how long to wait for the door presses
    */
-  public PanelCredentials.Panel register(String host, String passphrase, Duration waitForDoor) {
-    String ca = downloadCa(host);
-    HttpClient tls = httpsClient(ca);
+  public PanelCredentials.Panel register(final String host, final String passphrase, final Duration waitForDoor) {
+    final var ca = downloadCa(host);
+    final var api = api("https://" + host, httpsClient(ca));
 
-    boolean usePassphrase = passphrase != null && !passphrase.isBlank();
+    final var usePassphrase = passphrase != null && !passphrase.isBlank();
     if (!usePassphrase) {
-      awaitProximity(tls, host, waitForDoor);
+      awaitProximity(api, host, waitForDoor);
     }
 
-    String clientName = "span-home-" + HexFormat.of().formatHex(randomBytes(4));
-    Map<String, Object> body = new LinkedHashMap<>();
-    body.put("name", clientName);
-    body.put("description", "SpanHome HomeKit bridge");
-    if (usePassphrase) {
-      body.put("hopPassphrase", passphrase.trim());
+    final var clientName = "span-home-" + HexFormat.of().formatHex(randomBytes(4));
+    final var request = new AuthIn(
+        clientName, "SpanHome HomeKit bridge", null, null, usePassphrase ? passphrase.trim() : null);
+
+    final AuthOut reply;
+    try {
+      reply = call(host, () -> api.register(request));
+    } catch (final RestClientResponseException e) {
+      throw new RegistrationException(
+          describeFailure(e.getStatusCode().value(), e.getResponseBodyAsString(), usePassphrase));
     }
 
-    HttpResponse<String> response = send(tls, post("https://" + host + "/api/v2/auth/register", body));
-    if (response.statusCode() != 200) {
-      throw new RegistrationException(describeFailure(response, usePassphrase));
-    }
-
-    JsonNode json = parse(response.body());
-    String password = json.path("ebusBrokerPassword").asString(null);
-    String serial = json.path("serialNumber").asString(null);
-    if (password == null || password.isBlank() || serial == null || serial.isBlank()) {
+    if (reply == null || isBlank(reply.ebusBrokerPassword()) || isBlank(reply.serialNumber())) {
       throw new RegistrationException(
           "the panel registered this bridge but returned no broker password. Try again with the"
               + " passphrase from the SPAN Home app (--passphrase).");
     }
 
-    PanelCredentials.Panel panel = new PanelCredentials.Panel();
-    panel.serial = serial;
+    final var panel = new PanelCredentials.Panel();
+    panel.serial = reply.serialNumber();
     panel.host = host;
-    panel.mqttsPort = json.path("ebusBrokerMqttsPort").asInt(8883);
-    panel.brokerUsername = json.path("ebusBrokerUsername").asString(serial);
-    panel.brokerPassword = password;
+    panel.mqttsPort = reply.ebusBrokerMqttsPort() == null ? 8883 : Math.toIntExact(reply.ebusBrokerMqttsPort());
+    panel.brokerUsername = reply.ebusBrokerUsername() == null ? reply.serialNumber() : reply.ebusBrokerUsername();
+    panel.brokerPassword = reply.ebusBrokerPassword();
     panel.caCertificate = ca;
     panel.clientName = clientName;
     return panel;
@@ -98,27 +104,29 @@ public final class SpanRegistration {
 
   // ------------------------------------------------------------------ steps
 
-  private String downloadCa(String host) {
-    HttpRequest request =
-        HttpRequest.newBuilder(URI.create("http://" + host + "/api/v2/certificate/ca")).timeout(TIMEOUT).GET().build();
-    HttpResponse<String> response = send(plain, request);
-    if (response.statusCode() == 429) {
-      throw new RegistrationException("the panel rate-limited the certificate download (10 a minute). Wait a minute and retry.");
-    }
-    if (response.statusCode() != 200 || !response.body().contains("BEGIN CERTIFICATE")) {
+  String downloadCa(final String host) {
+    final var client = restClient("http://" + host, plain);
+    final String pem;
+    try {
+      pem = call(host, () -> client.get().uri(CA_PATH).accept(MediaType.ALL).retrieve().body(String.class));
+    } catch (final RestClientResponseException e) {
+      if (e.getStatusCode().value() == 429) {
+        throw new RegistrationException("the panel rate-limited the certificate download (10 a minute). Wait a minute and retry.");
+      }
       throw new RegistrationException(
-          "could not download the CA certificate from " + host + " (HTTP " + response.statusCode() + ")");
+          "could not download the CA certificate from " + host + " (HTTP " + e.getStatusCode().value() + ")");
     }
-    return response.body();
+    if (pem == null || !pem.contains("BEGIN CERTIFICATE")) {
+      throw new RegistrationException("could not download the CA certificate from " + host + " (HTTP 200)");
+    }
+    return pem;
   }
 
-  private void awaitProximity(HttpClient tls, String host, Duration wait) {
-    Instant deadline = Instant.now().plus(wait);
-    boolean told = false;
+  private void awaitProximity(final SpanPanelApi api, final String host, final Duration wait) {
+    final var deadline = Instant.now().plus(wait);
+    var told = false;
     while (true) {
-      HttpResponse<String> response =
-          send(tls, HttpRequest.newBuilder(URI.create("https://" + host + "/api/v2/status")).timeout(TIMEOUT).GET().build());
-      if (response.statusCode() == 200 && parse(response.body()).path("proximityProven").asBoolean(false)) {
+      if (proximityProven(api, host)) {
         System.err.println("Door presses detected.");
         return;
       }
@@ -136,17 +144,26 @@ public final class SpanRegistration {
       }
       try {
         Thread.sleep(3_000);
-      } catch (InterruptedException e) {
+      } catch (final InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new RegistrationException("interrupted while waiting for the door presses");
       }
     }
   }
 
-  static String describeFailure(HttpResponse<String> response, boolean usedPassphrase) {
-    String detail = parse(response.body()).path("detail").asString("");
-    int status = response.statusCode();
-    String suffix = detail.isBlank() ? "" : ": " + detail;
+  /** Whether the door presses are in; an error answer counts as not yet, like a "false". */
+  static boolean proximityProven(final SpanPanelApi api, final String host) {
+    try {
+      final var status = call(host, api::status);
+      return status != null && Boolean.TRUE.equals(status.proximityProven());
+    } catch (final RestClientResponseException e) {
+      return false;
+    }
+  }
+
+  static String describeFailure(final int status, final String body, final boolean usedPassphrase) {
+    final var detail = detail(body);
+    final var suffix = detail.isBlank() ? "" : ": " + detail;
     if (status == 401 || status == 403) {
       return usedPassphrase
           ? "the panel rejected the passphrase (HTTP " + status + suffix + "). Copy it again from the SPAN Home app."
@@ -155,53 +172,68 @@ public final class SpanRegistration {
     return "registration failed with HTTP " + status + suffix;
   }
 
+  /** The {@code detail} of the panel's error body ({@link ErrorOut}), or "" if it has none. */
+  private static String detail(final String body) {
+    if (body == null || body.isBlank()) {
+      return "";
+    }
+    try {
+      final var error = MAPPER.readValue(body, ErrorOut.class);
+      return error == null || error.detail() == null ? "" : error.detail();
+    } catch (final JacksonException e) {
+      return "";
+    }
+  }
+
   // ---------------------------------------------------------------- helpers
 
-  private static HttpClient httpsClient(String caPem) {
+  /** The generated SPAN API client for {@code baseUrl}, sending through {@code http}. */
+  static SpanPanelApi api(final String baseUrl, final HttpClient http) {
+    return HttpServiceProxyFactory.builderFor(RestClientAdapter.create(restClient(baseUrl, http)))
+        .build()
+        .createClient(SpanPanelApi.class);
+  }
+
+  private static RestClient restClient(final String baseUrl, final HttpClient http) {
+    final var factory = new JdkClientHttpRequestFactory(http);
+    factory.setReadTimeout(TIMEOUT);
+    return RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
+  }
+
+  private static HttpClient httpsClient(final String caPem) {
     try {
-      SSLContext context = PanelTls.sslContext(caPem);
+      final var context = PanelTls.sslContext(caPem);
       return HttpClient.newBuilder().connectTimeout(TIMEOUT).sslContext(context).build();
-    } catch (Exception e) {
+    } catch (final Exception e) {
       throw new RegistrationException("the panel's CA certificate could not be loaded: " + e.getMessage(), e);
     }
   }
 
-  private static HttpRequest post(String url, Object body) {
+  /**
+   * Runs one request. An HTTP error status comes back as {@link RestClientResponseException} for
+   * the caller to read; anything else that goes wrong becomes a {@link RegistrationException}.
+   */
+  private static <T> T call(final String host, final Supplier<T> request) {
     try {
-      return HttpRequest.newBuilder(URI.create(url))
-          .timeout(TIMEOUT)
-          .header("Content-Type", "application/json")
-          .POST(HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body)))
-          .build();
-    } catch (JacksonException e) {
-      throw new RegistrationException("could not build the registration request", e);
-    }
-  }
-
-  private static HttpResponse<String> send(HttpClient client, HttpRequest request) {
-    try {
-      return client.send(request, HttpResponse.BodyHandlers.ofString());
-    } catch (IOException e) {
+      return request.get();
+    } catch (final RestClientResponseException e) {
+      throw e;
+    } catch (final ResourceAccessException e) {
+      final var cause = e.getMostSpecificCause();
       throw new RegistrationException(
-          "could not reach " + request.uri().getHost() + ": " + e.getMessage()
+          "could not reach " + host + ": " + (cause.getMessage() == null ? cause : cause.getMessage())
               + ". Check the address, and that this machine is on the same network as the panel.", e);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new RegistrationException("interrupted while talking to the panel");
+    } catch (final RestClientException e) {
+      throw new RegistrationException("the panel at " + host + " sent a reply this bridge could not read: " + e.getMessage(), e);
     }
   }
 
-  private static JsonNode parse(String text) {
-    try {
-      JsonNode node = MAPPER.readTree(text == null ? "" : text);
-      return node == null ? MAPPER.createObjectNode() : node;
-    } catch (Exception e) {
-      return MAPPER.createObjectNode();
-    }
+  private static boolean isBlank(final String value) {
+    return value == null || value.isBlank();
   }
 
-  private static byte[] randomBytes(int count) {
-    byte[] bytes = new byte[count];
+  private static byte[] randomBytes(final int count) {
+    final var bytes = new byte[count];
     new SecureRandom().nextBytes(bytes);
     return bytes;
   }

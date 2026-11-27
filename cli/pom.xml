@@ -14,7 +14,7 @@
   <name>SPAN Panel HomeKit :: cli</name>
   <description>
     The plain runnable jar, with the Breaker Board dashboard on its own small HTTP server and
-    no Spring. This is what launchd and systemd run, and the jar keeps its old name and path -
+    no Spring Boot (core uses Spring's HTTP client for the generated SPAN API client). This is what launchd and systemd run, and the jar keeps its old name and path -
     target/span-home.jar - so existing units need no change.
   </description>
 

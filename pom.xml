@@ -48,6 +48,15 @@
     <!-- HAP-Java brings netty 4.1.72; pinned to a patched 4.1 release (see dependencyManagement). -->
     <netty.version>4.1.140.Final</netty.version>
     <spring-boot.version>4.1.2</spring-boot.version>
+    <!--
+      The Spring Framework that Spring Boot ${spring-boot.version} uses. core needs spring-web
+      for the generated SPAN API client; keep this in step when Spring Boot moves, so core and
+      web run the same Spring.
+    -->
+    <spring-framework.version>7.0.10</spring-framework.version>
+    <jakarta-annotation.version>3.0.0</jakarta-annotation.version>
+    <jspecify.version>1.0.1</jspecify.version>
+    <openapi-generator.version>7.28.0</openapi-generator.version>
   </properties>
 
   <dependencyManagement>
@@ -63,6 +72,26 @@
         <version>${netty.version}</version>
         <type>pom</type>
         <scope>import</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-framework-bom</artifactId>
+        <version>${spring-framework.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- The generated SPAN API client's records use these annotations. -->
+      <dependency>
+        <groupId>jakarta.annotation</groupId>
+        <artifactId>jakarta.annotation-api</artifactId>
+        <version>${jakarta-annotation.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jspecify</groupId>
+        <artifactId>jspecify</artifactId>
+        <version>${jspecify.version}</version>
       </dependency>
 
       <dependency>
@@ -131,6 +160,11 @@
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-shade-plugin</artifactId>
           <version>3.6.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.openapitools</groupId>
+          <artifactId>openapi-generator-maven-plugin</artifactId>
+          <version>${openapi-generator.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>
