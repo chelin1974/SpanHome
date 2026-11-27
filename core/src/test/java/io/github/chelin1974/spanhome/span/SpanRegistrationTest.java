@@ -11,8 +11,6 @@ import com.sun.net.httpserver.HttpServer;
 import io.github.chelin1974.spanhome.span.SpanRegistration.RegistrationException;
 import io.github.chelin1974.spanhome.span.api.SpanPanelApi;
 import io.github.chelin1974.spanhome.span.api.model.AuthIn;
-import io.github.chelin1974.spanhome.span.api.model.AuthOut;
-import io.github.chelin1974.spanhome.span.api.model.StatusV2Out;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
@@ -44,15 +42,16 @@ class SpanRegistrationTest {
     server.stop(0);
   }
 
-  private void answer(String path, int status, String contentType, String body) {
+  private void answer(final String path, final int status, final String contentType, final String body) {
     server.createContext(path, exchange -> {
       lastBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
       reply(exchange, status, contentType, body);
     });
   }
 
-  private static void reply(HttpExchange exchange, int status, String contentType, String body) throws IOException {
-    byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+  private static void reply(final HttpExchange exchange, final int status, final String contentType, final String body)
+      throws IOException {
+    final var bytes = body.getBytes(StandardCharsets.UTF_8);
     exchange.getResponseHeaders().set("Content-Type", contentType);
     exchange.sendResponseHeaders(status, bytes.length);
     exchange.getResponseBody().write(bytes);
@@ -65,7 +64,7 @@ class SpanRegistrationTest {
         "{\"serialNumber\":\"nj-2316-005k6\",\"firmwareVersion\":\"spanos2/r202645/04\","
             + "\"proximityProven\":true,\"hardwareVersion\":\"MAIN 32\",\"addedLater\":1}");
 
-    StatusV2Out status = api.status();
+    final var status = api.status();
 
     assertEquals("nj-2316-005k6", status.serialNumber());
     assertEquals("MAIN 32", status.hardwareVersion());
@@ -88,13 +87,13 @@ class SpanRegistrationTest {
             + "\"ebusBrokerPassword\":\"secret\",\"ebusBrokerHost\":\"span.local\",\"ebusBrokerMqttsPort\":8883,"
             + "\"ebusBrokerWsPort\":9001,\"ebusBrokerWssPort\":9002}");
 
-    AuthOut reply = api.register(new AuthIn("span-home-test", "SpanHome HomeKit bridge", null, null, "pass phrase"));
+    final var reply = api.register(new AuthIn("span-home-test", "SpanHome HomeKit bridge", null, null, "pass phrase"));
 
     assertEquals(1795000000123L, reply.iatMs());
     assertEquals("secret", reply.ebusBrokerPassword());
     assertEquals(8883L, reply.ebusBrokerMqttsPort());
     assertNull(reply.hopPassphrase());
-    String sent = lastBody.get();
+    final var sent = lastBody.get();
     assertTrue(sent.contains("\"name\":\"span-home-test\""), sent);
     assertTrue(sent.contains("\"hopPassphrase\":\"pass phrase\""), sent);
     assertFalse(sent.contains("otp"), sent);
@@ -105,7 +104,7 @@ class SpanRegistrationTest {
   void registerWithoutAPassphraseLeavesTheFieldOut() {
     answer("/api/v2/auth/register", 422, "application/json", "{\"detail\":\"no proof of proximity\"}");
 
-    RestClientResponseException e = assertThrows(RestClientResponseException.class,
+    final var e = assertThrows(RestClientResponseException.class,
         () -> api.register(new AuthIn("span-home-test", null, null, null, null)));
 
     assertEquals("{\"name\":\"span-home-test\"}", lastBody.get());
@@ -126,7 +125,7 @@ class SpanRegistrationTest {
 
   @Test
   void theCaCertificateIsDownloadedAsText() {
-    String pem = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n";
+    final var pem = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n";
     answer(SpanRegistration.CA_PATH, 200, "application/x-pem-file", pem);
 
     assertEquals(pem, new SpanRegistration().downloadCa(host));
@@ -136,7 +135,7 @@ class SpanRegistrationTest {
   void aRateLimitedCaDownloadSaysToWait() {
     answer(SpanRegistration.CA_PATH, 429, "application/json", "{\"detail\":\"Too Many Requests\"}");
 
-    RegistrationException e = assertThrows(RegistrationException.class, () -> new SpanRegistration().downloadCa(host));
+    final var e = assertThrows(RegistrationException.class, () -> new SpanRegistration().downloadCa(host));
 
     assertTrue(e.getMessage().contains("rate-limited"), e.getMessage());
   }
@@ -145,7 +144,7 @@ class SpanRegistrationTest {
   void anUnreachablePanelIsReportedAsSuch() {
     server.stop(0);
 
-    RegistrationException e = assertThrows(RegistrationException.class, () -> new SpanRegistration().downloadCa(host));
+    final var e = assertThrows(RegistrationException.class, () -> new SpanRegistration().downloadCa(host));
 
     assertTrue(e.getMessage().startsWith("could not reach " + host), e.getMessage());
   }

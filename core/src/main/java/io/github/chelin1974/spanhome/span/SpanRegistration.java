@@ -4,14 +4,12 @@ import io.github.chelin1974.spanhome.span.api.SpanPanelApi;
 import io.github.chelin1974.spanhome.span.api.model.AuthIn;
 import io.github.chelin1974.spanhome.span.api.model.AuthOut;
 import io.github.chelin1974.spanhome.span.api.model.ErrorOut;
-import io.github.chelin1974.spanhome.span.api.model.StatusV2Out;
 import java.net.http.HttpClient;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.function.Supplier;
-import javax.net.ssl.SSLContext;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.ResourceAccessException;
@@ -50,11 +48,11 @@ public final class SpanRegistration {
 
   /** Raised with a message fit to show the user. */
   public static final class RegistrationException extends RuntimeException {
-    public RegistrationException(String message) {
+    public RegistrationException(final String message) {
       super(message);
     }
 
-    public RegistrationException(String message, Throwable cause) {
+    public RegistrationException(final String message, final Throwable cause) {
       super(message, cause);
     }
   }
@@ -66,23 +64,23 @@ public final class SpanRegistration {
    * @param passphrase the panel passphrase, or null to use the door-press proof
    * @param waitForDoor with no passphrase, how long to wait for the door presses
    */
-  public PanelCredentials.Panel register(String host, String passphrase, Duration waitForDoor) {
-    String ca = downloadCa(host);
-    SpanPanelApi api = api("https://" + host, httpsClient(ca));
+  public PanelCredentials.Panel register(final String host, final String passphrase, final Duration waitForDoor) {
+    final var ca = downloadCa(host);
+    final var api = api("https://" + host, httpsClient(ca));
 
-    boolean usePassphrase = passphrase != null && !passphrase.isBlank();
+    final var usePassphrase = passphrase != null && !passphrase.isBlank();
     if (!usePassphrase) {
       awaitProximity(api, host, waitForDoor);
     }
 
-    String clientName = "span-home-" + HexFormat.of().formatHex(randomBytes(4));
-    AuthIn request = new AuthIn(
+    final var clientName = "span-home-" + HexFormat.of().formatHex(randomBytes(4));
+    final var request = new AuthIn(
         clientName, "SpanHome HomeKit bridge", null, null, usePassphrase ? passphrase.trim() : null);
 
-    AuthOut reply;
+    final AuthOut reply;
     try {
       reply = call(host, () -> api.register(request));
-    } catch (RestClientResponseException e) {
+    } catch (final RestClientResponseException e) {
       throw new RegistrationException(
           describeFailure(e.getStatusCode().value(), e.getResponseBodyAsString(), usePassphrase));
     }
@@ -93,7 +91,7 @@ public final class SpanRegistration {
               + " passphrase from the SPAN Home app (--passphrase).");
     }
 
-    PanelCredentials.Panel panel = new PanelCredentials.Panel();
+    final var panel = new PanelCredentials.Panel();
     panel.serial = reply.serialNumber();
     panel.host = host;
     panel.mqttsPort = reply.ebusBrokerMqttsPort() == null ? 8883 : Math.toIntExact(reply.ebusBrokerMqttsPort());
@@ -106,12 +104,12 @@ public final class SpanRegistration {
 
   // ------------------------------------------------------------------ steps
 
-  String downloadCa(String host) {
-    RestClient client = restClient("http://" + host, plain);
-    String pem;
+  String downloadCa(final String host) {
+    final var client = restClient("http://" + host, plain);
+    final String pem;
     try {
       pem = call(host, () -> client.get().uri(CA_PATH).accept(MediaType.ALL).retrieve().body(String.class));
-    } catch (RestClientResponseException e) {
+    } catch (final RestClientResponseException e) {
       if (e.getStatusCode().value() == 429) {
         throw new RegistrationException("the panel rate-limited the certificate download (10 a minute). Wait a minute and retry.");
       }
@@ -124,9 +122,9 @@ public final class SpanRegistration {
     return pem;
   }
 
-  private void awaitProximity(SpanPanelApi api, String host, Duration wait) {
-    Instant deadline = Instant.now().plus(wait);
-    boolean told = false;
+  private void awaitProximity(final SpanPanelApi api, final String host, final Duration wait) {
+    final var deadline = Instant.now().plus(wait);
+    var told = false;
     while (true) {
       if (proximityProven(api, host)) {
         System.err.println("Door presses detected.");
@@ -146,7 +144,7 @@ public final class SpanRegistration {
       }
       try {
         Thread.sleep(3_000);
-      } catch (InterruptedException e) {
+      } catch (final InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new RegistrationException("interrupted while waiting for the door presses");
       }
@@ -154,18 +152,18 @@ public final class SpanRegistration {
   }
 
   /** Whether the door presses are in; an error answer counts as not yet, like a "false". */
-  static boolean proximityProven(SpanPanelApi api, String host) {
+  static boolean proximityProven(final SpanPanelApi api, final String host) {
     try {
-      StatusV2Out status = call(host, api::status);
+      final var status = call(host, api::status);
       return status != null && Boolean.TRUE.equals(status.proximityProven());
-    } catch (RestClientResponseException e) {
+    } catch (final RestClientResponseException e) {
       return false;
     }
   }
 
-  static String describeFailure(int status, String body, boolean usedPassphrase) {
-    String detail = detail(body);
-    String suffix = detail.isBlank() ? "" : ": " + detail;
+  static String describeFailure(final int status, final String body, final boolean usedPassphrase) {
+    final var detail = detail(body);
+    final var suffix = detail.isBlank() ? "" : ": " + detail;
     if (status == 401 || status == 403) {
       return usedPassphrase
           ? "the panel rejected the passphrase (HTTP " + status + suffix + "). Copy it again from the SPAN Home app."
@@ -175,14 +173,14 @@ public final class SpanRegistration {
   }
 
   /** The {@code detail} of the panel's error body ({@link ErrorOut}), or "" if it has none. */
-  private static String detail(String body) {
+  private static String detail(final String body) {
     if (body == null || body.isBlank()) {
       return "";
     }
     try {
-      ErrorOut error = MAPPER.readValue(body, ErrorOut.class);
+      final var error = MAPPER.readValue(body, ErrorOut.class);
       return error == null || error.detail() == null ? "" : error.detail();
-    } catch (JacksonException e) {
+    } catch (final JacksonException e) {
       return "";
     }
   }
@@ -190,23 +188,23 @@ public final class SpanRegistration {
   // ---------------------------------------------------------------- helpers
 
   /** The generated SPAN API client for {@code baseUrl}, sending through {@code http}. */
-  static SpanPanelApi api(String baseUrl, HttpClient http) {
+  static SpanPanelApi api(final String baseUrl, final HttpClient http) {
     return HttpServiceProxyFactory.builderFor(RestClientAdapter.create(restClient(baseUrl, http)))
         .build()
         .createClient(SpanPanelApi.class);
   }
 
-  private static RestClient restClient(String baseUrl, HttpClient http) {
-    JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(http);
+  private static RestClient restClient(final String baseUrl, final HttpClient http) {
+    final var factory = new JdkClientHttpRequestFactory(http);
     factory.setReadTimeout(TIMEOUT);
     return RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
   }
 
-  private static HttpClient httpsClient(String caPem) {
+  private static HttpClient httpsClient(final String caPem) {
     try {
-      SSLContext context = PanelTls.sslContext(caPem);
+      final var context = PanelTls.sslContext(caPem);
       return HttpClient.newBuilder().connectTimeout(TIMEOUT).sslContext(context).build();
-    } catch (Exception e) {
+    } catch (final Exception e) {
       throw new RegistrationException("the panel's CA certificate could not be loaded: " + e.getMessage(), e);
     }
   }
@@ -215,27 +213,27 @@ public final class SpanRegistration {
    * Runs one request. An HTTP error status comes back as {@link RestClientResponseException} for
    * the caller to read; anything else that goes wrong becomes a {@link RegistrationException}.
    */
-  private static <T> T call(String host, Supplier<T> request) {
+  private static <T> T call(final String host, final Supplier<T> request) {
     try {
       return request.get();
-    } catch (RestClientResponseException e) {
+    } catch (final RestClientResponseException e) {
       throw e;
-    } catch (ResourceAccessException e) {
-      Throwable cause = e.getMostSpecificCause();
+    } catch (final ResourceAccessException e) {
+      final var cause = e.getMostSpecificCause();
       throw new RegistrationException(
           "could not reach " + host + ": " + (cause.getMessage() == null ? cause : cause.getMessage())
               + ". Check the address, and that this machine is on the same network as the panel.", e);
-    } catch (RestClientException e) {
+    } catch (final RestClientException e) {
       throw new RegistrationException("the panel at " + host + " sent a reply this bridge could not read: " + e.getMessage(), e);
     }
   }
 
-  private static boolean isBlank(String value) {
+  private static boolean isBlank(final String value) {
     return value == null || value.isBlank();
   }
 
-  private static byte[] randomBytes(int count) {
-    byte[] bytes = new byte[count];
+  private static byte[] randomBytes(final int count) {
+    final var bytes = new byte[count];
     new SecureRandom().nextBytes(bytes);
     return bytes;
   }
