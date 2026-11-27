@@ -14,9 +14,15 @@
   <name>SPAN Panel HomeKit :: core</name>
   <description>
     The bridge: panel connections over MQTT, HomeKit accessories, pairing state, metrics, and
-    the dashboard's model and its own small HTTP server. No Spring, so the CLI flavour stays a
-    9 MB jar.
+    the dashboard's model and its own small HTTP server. Spring appears only as the HTTP client
+    library behind the SPAN API client generated from SPAN's OpenAPI spec: no Spring Boot, and
+    no application context is started.
   </description>
+
+  <properties>
+    <!-- The SPAN firmware release src/main/openapi/span-api.json comes from. -->
+    <span-api.release>r202645</span-api.release>
+  </properties>
 
   <dependencies>
     <dependency>
@@ -32,6 +38,31 @@
     <dependency>
       <groupId>tools.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
+    </dependency>
+
+    <!--
+      The generated SPAN API client: a Spring HTTP interface on RestClient, with JDK HttpClient
+      underneath. Used as a library; no application context is started.
+    -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-web</artifactId>
+    </dependency>
+    <!--
+      HttpServiceProxyFactory needs spring-context (argument conversion) and spring-aop (the
+      proxy), which spring-web declares optional. spring-context brings spring-aop.
+    -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-context</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>jakarta.annotation</groupId>
+      <artifactId>jakarta.annotation-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jspecify</groupId>
+      <artifactId>jspecify</artifactId>
     </dependency>
 
     <dependency>
@@ -51,4 +82,70 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+      <!--
+        Generates the SPAN API client from SPAN's own OpenAPI spec: the SpanPanelApi interface
+        (a Spring HTTP interface) and Java records for its requests and responses. Only the
+        endpoints the bridge calls are generated; see src/main/openapi/README.md.
+      -->
+      <plugin>
+        <groupId>org.openapitools</groupId>
+        <artifactId>openapi-generator-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>span-api</id>
+            <goals><goal>generate</goal></goals>
+            <configuration>
+              <inputSpec>${project.basedir}/src/main/openapi/span-api.json</inputSpec>
+              <generatorName>spring</generatorName>
+              <library>spring-http-interface</library>
+              <apiPackage>io.github.chelin1974.spanhome.span.api</apiPackage>
+              <modelPackage>io.github.chelin1974.spanhome.span.api.model</modelPackage>
+              <!-- Endpoints the bridge calls; the rest of the spec is left out. -->
+              <openapiNormalizer>
+                <openapiNormalizer>FILTER=operationId:get_v2_status_api_v2_status_get|generate_jwt_api_v2_auth_register_post</openapiNormalizer>
+                <openapiNormalizer>SET_TAGS_FOR_ALL_OPERATIONS=SpanPanel</openapiNormalizer>
+              </openapiNormalizer>
+              <!-- The spec's operation IDs are FastAPI's; give the methods readable names. -->
+              <operationIdNameMappings>
+                <operationIdNameMapping>get_v2_status_api_v2_status_get=status</operationIdNameMapping>
+                <operationIdNameMapping>generate_jwt_api_v2_auth_register_post=register</operationIdNameMapping>
+              </operationIdNameMappings>
+              <!--
+                The spec gives integers no format, which would make them int. iatMs is a
+                millisecond timestamp and does not fit, so every integer is a long.
+              -->
+              <typeMappings>
+                <typeMapping>integer=Long</typeMapping>
+              </typeMappings>
+              <modelsToGenerate>AuthIn,AuthOut,StatusV2Out,ErrorOut</modelsToGenerate>
+              <generateApiDocumentation>false</generateApiDocumentation>
+              <generateModelDocumentation>false</generateModelDocumentation>
+              <generateApiTests>false</generateApiTests>
+              <generateModelTests>false</generateModelTests>
+              <generateSupportingFiles>false</generateSupportingFiles>
+              <configOptions>
+                <useSpringBoot4>true</useSpringBoot4>
+                <useJackson3>true</useJackson3>
+                <useRecords>true</useRecords>
+                <useJspecify>true</useJspecify>
+                <useTags>true</useTags>
+                <interfaceOnly>true</interfaceOnly>
+                <!-- Methods return the body; errors arrive as RestClientResponseException. -->
+                <useResponseEntity>false</useResponseEntity>
+                <openApiNullable>false</openApiNullable>
+                <!-- Leaves unset optional fields out of requests, e.g. no "hopPassphrase": null. -->
+                <generateJsonIncludeAnnotations>true</generateJsonIncludeAnnotations>
+                <generateJsonSetterNullsAnnotations>false</generateJsonSetterNullsAnnotations>
+                <hideGenerationTimestamp>true</hideGenerationTimestamp>
+                <sourceFolder>src/main/java</sourceFolder>
+              </configOptions>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 </project>

@@ -103,7 +103,7 @@ Either way you get two jars:
 
 | Jar | What it is |
 | --- | --- |
-| `cli/target/span-home.jar` (~9 MB) | the plain runnable jar: HomeKit, the Breaker Board dashboard on its own small HTTP server, no Spring. This is what launchd and systemd run. |
+| `cli/target/span-home.jar` (~18 MB) | the plain runnable jar: HomeKit, the Breaker Board dashboard on its own small HTTP server, no Spring Boot. This is what launchd and systemd run. |
 | `web/target/span-home-web.jar` (~29 MB) | the same bridge inside Spring Boot: the dashboard served by Tomcat, a REST API, and actuator health with liveness and readiness groups. This is what the container runs. |
 
 Both read the same `span-home.config.json` and write the same files, so you can swap between
@@ -639,12 +639,19 @@ keep it owner-only.
 mvn test
 ```
 
+The SPAN API REST client is not written by hand: `mvn` generates it from SPAN's OpenAPI spec,
+checked in at `core/src/main/openapi/span-api.json` (firmware release r202645), with
+[OpenAPI Generator](https://openapi-generator.tech/) 7.28.0. It is a Spring HTTP interface,
+`SpanPanelApi`, with a Java record for each request and response. To follow a new firmware
+release, replace the spec as `core/src/main/openapi/README.md` describes.
+
 | Path | What it does |
 | --- | --- |
 | `span/HomieTree` | Pure model of one panel's device tree, fed MQTT messages. **Start here.** |
 | `span/SpanReadings` | What the properties mean: signs, units, battery and grid state |
 | `span/SpanPanelConnection` | TLS MQTT client per panel |
-| `span/SpanRegistration` | `--register`: CA download and `auth/register` |
+| `span/SpanRegistration` | `--register`: CA download and `auth/register`, through the generated client |
+| `span/api` (generated) | `SpanPanelApi` and its records, generated at build time by OpenAPI Generator from SPAN's own spec in `core/src/main/openapi` |
 | `homekit/CircuitOutlet` | A circuit as an outlet, with Eve power characteristics |
 | `homekit/BackupBattery` | Grid contact sensor and battery service |
 | `metrics/OtlpMetrics` | Readings to an OTLP metrics request (pure) |
